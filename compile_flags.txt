@@ -1,0 +1,13 @@
+-I/home/nate/glfw/include
+-I/usr/include
+-I/usr/include/X11
+-I/home/nate/vulkan/x86_64/include
+-I/home/nate/cglm/include
+-L/home/nate/glfw/build/src
+-lvulkan
+-lglfw3
+-lGL
+-ldl
+-lX11
+-lpthread
+-Wall
