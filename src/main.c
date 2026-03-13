@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <assert.h>
+#include <time.h>
 
 #include "stb_image.h"
 #include <shaderc/shaderc.h>
@@ -69,23 +70,25 @@ int main(int argc, char** argv){
 		img_t image_input;
 		img_t image_output;
 
-		/*if(!img_validate(&image_input)){
-			printf("image read failed. trying binary\n");
-			image_input = img_create_from_binary(file_input);
-		}
-		if(!img_validate(&image_input)){
-			printf("image file not found\n");
-			exit(-1);
-		}*/
+		time_t time_start = 0;
+		time_t time_end = 0;
 
 		if(cpu_program != UINT32_MAX){
 			// cpu program
+			time_start = clock();
 			image_input = img_create_from_image(file_input,0);
+			time_end = clock();
+			printf("image load: %.2fms\n",(((float)(time_end-time_start))/CLOCKS_PER_SEC)*1000);
 			printf("starting program '%s' \n",img_program_table[cpu_program].name);
+
+			time_start = clock();
 			image_output = img_program_table[cpu_program].program(image_input, arg_count, pargs);
+			time_end = clock();
+			printf("program exec: %.2fms\n",(((float)(time_end-time_start))/CLOCKS_PER_SEC)*1000);
 		}else{
 			// gpu program or nothing at all, who knows
 			printf("starting gpu program '%s'\n",program_name);
+			time_start = clock();
 			image_input = img_create_from_image(file_input,4);
 			FILE* f = fopen(program_name,"r");
 			if(!f){
@@ -221,9 +224,16 @@ int main(int argc, char** argv){
 				.pCommandBuffers = &cmd
 			};
 
+			time_end = clock();
+			printf("vulkan instance and PSOs setup: %.2fms\n",(((float)(time_end-time_start))/CLOCKS_PER_SEC)*1000);
+			time_start = clock();
+
 			vkQueueSubmit(vkr.queue[0],1,&info_submit,fence);
 			vkWaitForFences(vkr.device,1,&fence,VK_TRUE,UINT64_MAX);
 			vkResetFences(vkr.device,1,&fence);
+
+			time_end = clock();
+			printf("gpu compute dispatch: %.2fms\n",(((float)(time_end-time_start))/CLOCKS_PER_SEC)*1000);
 
 			image_output = img_create_zero(image_input.width,image_input.height,image_input.depth,image_input.channels);
 
