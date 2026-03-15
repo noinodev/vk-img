@@ -117,8 +117,6 @@ void vkr_copy_buffer_to_image(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer buff
 }
 
 void vkr_copy_image_to_buffer(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t depth){
-    //VkCommandBuffer cmd = vkr_stc_begin(vkr->device,vkr->command_pool);
-
     VkBufferImageCopy region = {
     	.bufferOffset = 0,
 		.bufferRowLength = 0,
@@ -140,13 +138,21 @@ void vkr_copy_image_to_buffer(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer buff
     vkCmdCopyImageToBuffer(
 	    cmd,
 	    image,
-	    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+	    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		buffer,
 	    1,
 	    &region
 	);
+}
 
-    //vkr_stc_end(vkr->device,vkr->command_pool,vkr->queue[VKR_QUEUE_GRAPHICS],cmd);
+void vkr_copy_buffer(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer src, VkBuffer dest, VkDeviceSize size){
+    VkBufferCopy region = {
+		.dstOffset = 0,
+		.srcOffset = 0,
+		.size = size
+    };
+
+	vkCmdCopyBuffer(cmd,src,dest,1,&region);
 }
 
 VkImageSubresourceRange vkr_texture_subresource_default(){
@@ -181,16 +187,6 @@ int vkr_texture_transition_many(VkCommandBuffer cmd, uint32_t count, VkImage* im
 	    dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 	    destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-	    srcAccessMask = 0;
-	    dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	    destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-	}else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-	    srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	    dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}else if(oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL){
 		srcAccessMask = 0;
 		dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -202,9 +198,34 @@ int vkr_texture_transition_many(VkCommandBuffer cmd, uint32_t count, VkImage* im
 		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 	}else if(oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
-		srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}else if(oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL){
+		srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}else if(oldLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_GENERAL){
+		srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	}/*else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+	    srcAccessMask = 0;
+	    dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	    destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	}else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+	    srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	    dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}else if(oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL){
+		srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	}else if(oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
 	    srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -226,13 +247,8 @@ int vkr_texture_transition_many(VkCommandBuffer cmd, uint32_t count, VkImage* im
 		dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT; // writing in depth pass
 		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-	}else if(oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL){
-		srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}else{
-		printf("invalid layout transition\n");
+	}*/else{
+		printf("invalid layout transition [!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!]\n");
 		return -1;
 	}
 
@@ -322,8 +338,7 @@ vkr_texture vkr_create_texture(vkr_state* vkr, uint32_t width, uint32_t height, 
 	texture.height = height;
 	texture.depth = depth;
 	texture.type = depth>1?VK_IMAGE_VIEW_TYPE_3D:VK_IMAGE_VIEW_TYPE_2D;
-	texture.mips = 1;
-	//texture.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	texture.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	return texture;
 }

@@ -29,6 +29,10 @@ int img_validate(img_t* img){
     else return 1;
 }
 
+size_t img_get_size(img_t* img){
+    return img->width*img->height*img->depth*img->channels*sizeof(float);
+}
+
 img_t img_create_zero(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels){
     img_t out = {0};
     out.width = width;
@@ -100,6 +104,275 @@ void img_write_as_binary(img_t* img, const char* file){
     fclose(f);
 }
 
+// gpu thing
+
+img_gpu_t img_gpu_init(){
+    img_gpu_t gpu = {0};
+    vkr_state* vkr = &gpu.vkr;
+    int res = 0;
+    res = vkr_init(vkr);
+
+    VkFenceCreateInfo info_fence = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+    VkFence fence;
+    vkCreateFence(vkr->device,&info_fence,NULL,&fence);
+
+    // descriptors
+    vkr_generate_descriptor_state(vkr,sizeof(img_gpu_descriptors)/sizeof(img_gpu_descriptors[0]),img_gpu_descriptors);
+    vkr_generate_pipeline_layout(vkr);
+
+    return gpu;
+}
+
+img_gpu_program_t img_gpu_load_program_glsl(img_gpu_t* gpu, const char* shader_file, uint32_t width, uint32_t height, uint32_t depth){
+    FILE* f = fopen(shader_file,"r");
+    if(!f) exit(-1);
+
+    fseek(f,0,SEEK_END);
+    long fsize = ftell(f);
+    fseek(f,0,SEEK_SET);
+
+    char* glsl = malloc(fsize*sizeof(char)+1);
+    fread(glsl,1,fsize,f);
+    fclose(f);
+
+    shaderc_compiler_t compiler = shaderc_compiler_initialize();
+    shaderc_compile_options_t options = shaderc_compile_options_initialize();
+
+    shaderc_compilation_result_t module = shaderc_compile_into_spv(
+        compiler,
+        glsl, fsize,
+        shaderc_compute_shader,
+        shader_file,
+        "main",
+        options
+    );
+
+    if(shaderc_result_get_compilation_status(module) != shaderc_compilation_status_success) {
+        printf("glslc compile fail %s\n", shaderc_result_get_error_message(module));
+        exit(-1);
+    }
+
+    size_t size = shaderc_result_get_length(module);
+    const uint32_t* spv = shaderc_result_get_bytes(module);
+
+    // vk pso creation
+
+    VkShaderModule shader_module = vkr_shader_module_create(gpu->vkr.device, spv, size);
+	VkPipeline pipeline = vkr_generate_pipeline_compute(&gpu->vkr,shader_module);
+    vkDestroyShaderModule(gpu->vkr.device,shader_module,NULL);
+    free((void*)spv);
+    free(glsl);
+
+    img_gpu_program_t out = {0};
+    out.pipeline = pipeline;
+    out.workgroup = (VkExtent3D){width,height,depth};
+
+    return out;
+}
+
+size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, uint32_t height, uint32_t depth, uint32_t channels){
+    size_t count = gpu->device.count++;
+    img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
+    buffer->type = IMG_GPU_TYPE_IMAGE;
+
+    VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    buffer->image = vkr_create_texture(
+        &gpu->vkr,width,height,depth,format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    vkr_bind_view_compute(&gpu->vkr, IMG_GPU_TYPE_IMAGE, buffer->image.view, binding);
+
+    return count;
+}
+
+size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size){
+    //img_gpu_buffer_t out = {0};
+    size_t count = gpu->device.count++;
+    img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
+    buffer->type = IMG_GPU_TYPE_BUFFER;
+    buffer->buffer.size = size;
+
+    vkr_alloc(
+        gpu->vkr.device,gpu->vkr.physical_device, size, 
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &buffer->buffer.buffer, &buffer->buffer.memory
+    );
+
+    vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,binding);
+
+    return count;
+}
+
+size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
+    VkBuffer hostBuffer;
+    VkDeviceMemory hostMemory;
+
+    vkr_alloc(gpu->vkr.device,gpu->vkr.physical_device,size,VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &hostBuffer, &hostMemory);
+
+    void* data;
+    vkMapMemory(gpu->vkr.device, hostMemory, 0, size, 0, &data);
+        memcpy(data, src, size);
+    vkUnmapMemory(gpu->vkr.device, hostMemory);
+
+    size_t count = gpu->host.count++;
+    gpu->host.device_ptr[count] = dest;
+    gpu->host.host_ptr[count] = NULL;
+    gpu->host.buffer[count] = (img_gpu_buffer_t){
+        .type = IMG_GPU_TYPE_BUFFER,
+        .buffer = {
+            .buffer = hostBuffer,
+            .memory = hostMemory,
+            .size = size
+        }
+    };
+
+    return count;
+}
+
+size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size){
+    VkBuffer hostBuffer;
+    VkDeviceMemory hostMemory;
+
+    vkr_alloc(gpu->vkr.device,gpu->vkr.physical_device,size,VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &hostBuffer, &hostMemory);
+
+    size_t count = gpu->host.count++;
+    gpu->host.device_ptr[count] = src;
+    gpu->host.host_ptr[count] = dest;
+    gpu->host.buffer[count] = (img_gpu_buffer_t){
+        .type = IMG_GPU_TYPE_BUFFER,
+        .buffer = {
+            .buffer = hostBuffer,
+            .memory = hostMemory,
+            .size = size
+        }
+    };
+
+    return count;
+}
+
+size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t width, uint32_t height, uint32_t depth){
+    size_t count = gpu->stages.count++;
+    gpu->stages.pass[count].program = program;
+    gpu->stages.pass[count].push_size = 0;
+    gpu->stages.pass[count].width = width;
+    gpu->stages.pass[count].height = height;
+    gpu->stages.pass[count].depth = depth;
+
+    return count;
+}
+
+void img_gpu_add_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size){
+    size_t size_align = (size + (IMG_GPU_PUSH_ALIGNMENT - 1)) & ~(IMG_GPU_PUSH_ALIGNMENT - 1);
+    size_t size_current = gpu->stages.pass[pass].push_size;
+    if(size_current + size_align > IMG_GPU_PUSH_MAX) return;
+
+    *(uint32_t*)(gpu->stages.pass[pass].push_data + size_current) = *(uint32_t*)data;
+    gpu->stages.pass[pass].push_size += size_align;
+}
+
+void img_gpu_dispatch(img_gpu_t* gpu){
+    VkCommandBuffer cmd = vkr_stc_begin(gpu->vkr.device,gpu->vkr.command_pool);
+    for(size_t i = 0; i < gpu->host.count; i++){
+        if(gpu->host.host_ptr[i] == NULL){
+            size_t device_idx = gpu->host.device_ptr[i];
+            img_gpu_buffer_t* buffer = &gpu->device.buffer[device_idx];
+            if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+
+            vkr_texture* texture = &buffer->image;
+
+            vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+            texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+            vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+        }
+    }
+
+    for(size_t i = 0; i < gpu->device.count; i++){
+        img_gpu_buffer_t* buffer = &gpu->device.buffer[i];
+        if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+
+        vkr_texture* texture = &buffer->image;
+
+        vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_GENERAL,vkr_texture_subresource_default());
+        texture->layout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->vkr.pipeline_state.layout,
+        0,
+        1, &gpu->vkr.descriptor_state.sets[0],
+        0, NULL
+    );
+
+    for(size_t i = 0; i < gpu->stages.count; i++){
+        img_gpu_pass_t* pass = &gpu->stages.pass[i];
+        uint32_t width = (pass->width + (pass->program->workgroup.width-1)) / pass->program->workgroup.width;
+        uint32_t height = (pass->height + (pass->program->workgroup.height-1)) / pass->program->workgroup.height;
+        uint32_t depth = (pass->depth + (pass->program->workgroup.depth-1)) / pass->program->workgroup.depth;
+        vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pass->program->pipeline);
+        vkCmdPushConstants(cmd,gpu->vkr.pipeline_state.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,pass->push_size, pass->push_data);
+        vkCmdDispatch(cmd,width,height,depth);
+
+        VkMemoryBarrier mb = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+        };
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            1, &mb,
+            0, NULL,
+            0, NULL
+        );
+    }
+
+    for(size_t i = 0; i < gpu->host.count; i++){
+        if(gpu->host.host_ptr[i] != NULL){
+            size_t device_idx = gpu->host.device_ptr[i];
+            img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
+            if(device->type == IMG_GPU_TYPE_IMAGE){
+                vkr_texture* texture = &device->image;
+
+                vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,vkr_texture_subresource_default());
+                vkr_copy_image_to_buffer(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image,texture->width, texture->height, texture->depth);
+            }else if(device->type == IMG_GPU_TYPE_BUFFER){
+                vkr_buffer* buffer = &device->buffer;
+                vkr_copy_buffer(&gpu->vkr,cmd,buffer->buffer,gpu->host.buffer[i].buffer.buffer,buffer->size);
+            }else printf("copying what exactly?\n");
+        }
+    }
+
+    vkr_stc_end(gpu->vkr.device,gpu->vkr.command_pool,gpu->vkr.queue[VKR_QUEUE_GRAPHICS],cmd);
+
+    for(size_t i = 0; i < gpu->host.count; i++){
+        if(gpu->host.host_ptr[i] != NULL){
+            vkr_buffer* buffer = &gpu->host.buffer[i].buffer;
+
+            void* data;
+            vkMapMemory(gpu->vkr.device, buffer->memory, 0, buffer->size, 0, &data);
+                memcpy(gpu->host.host_ptr[i], data, buffer->size);
+            vkUnmapMemory(gpu->vkr.device, buffer->memory);
+        }
+    }
+
+
+}
+
 // processors
 
 img_t img_program_greyscale(img_t input, int argc, char** argv){
@@ -165,7 +438,7 @@ img_t img_program_window(img_t input, int argc, char** argv){
     return out;
 }
 
-img_t img_program_histogram(img_t input, int argc, char** argv){
+img_t img_program_histogram_rgb(img_t input, int argc, char** argv){
     uint32_t width = 256;
     uint32_t height = 256;
     float yscale = 1;
@@ -222,9 +495,181 @@ img_t img_program_histogram(img_t input, int argc, char** argv){
             }
         }
     }
-    printf("]");
+    printf("]\n");
 
     free(histogram);
 
     return out;
+}
+
+img_t img_program_histogram(img_t input, int argc, char** argv){
+    uint32_t width = 256;
+    uint32_t height = 256;
+    float yscale = 1;
+
+    uint32_t* histogram = calloc(width,sizeof(uint32_t));
+
+    for(size_t i = 0; i < input.width*input.height*input.depth; i++){
+        size_t j = input.channels * i;
+        float grey = input.memory[j]*.2126 + input.memory[j+1]*.7152 + input.memory[j+2]*.0722;
+        uint32_t intensity = ++histogram[(uint32_t)(fmin(fmax(grey,0.),1.)*255)];
+        yscale = fmax(yscale,intensity/(float)height);
+    }
+
+    float fill[3] = {1,1,1};
+    img_t out = img_create_fill(width,height,1,3,fill);
+
+    printf("[");
+    for(uint32_t x = 0; x < width; x++){
+        printf("%d ",histogram[x]);
+        for(uint32_t y = 0; y < height; y++){
+            uint32_t sy = (uint32_t)floor(y*yscale);
+
+            uint32_t intensity = histogram[x];
+
+            uint32_t idx = (x+(height-1-y)*width) * 3;
+
+            if(intensity >= sy) out.memory[idx+1] = 0.;
+            
+        }
+    }
+    printf("]\n");
+
+    free(histogram);
+
+    return out;
+}
+
+img_t img_program_otsu(img_t input, int argc, char** argv){
+    uint32_t bins = 256;
+
+    uint32_t* histogram = calloc(bins,sizeof(uint32_t));
+
+    const float coeff[] = {.2126,.7152,.0722,0.}; // rgba
+    const size_t coeff_n = sizeof(coeff)/sizeof(coeff[0]);
+
+    uint32_t channels = 1;
+    img_t out = img_create_zero(input.width,input.height,input.depth,channels);
+
+    size_t pixel_count = input.width*input.height*input.depth;
+
+    for(size_t i = 0; i < pixel_count; i++){
+        size_t j = input.channels * i;
+
+        float grey = 0.;
+
+        for(size_t k = 0; k < coeff_n; k++){
+            uint32_t ch = (k < input.channels) ? k : input.channels-1;
+            grey += input.memory[j+ch] * coeff[k];
+        }
+        histogram[(uint32_t)(fmin(fmax(grey,0.),1.)*(bins-1))] += 1; // intensity histogram
+        out.memory[i] = grey; // intermediate image (conv to greyscale)
+    }
+
+    double intensity_sum = 0;
+    for(uint32_t t = 0; t < bins; t++) intensity_sum += (((double)t) / (bins)) * histogram[t];
+
+    double threshold = 0;
+    double sumB = 0;
+    double wB = 0;
+    double maxVar = 0;
+
+    for(uint32_t t = 0; t < bins; t++){
+        wB += histogram[t];
+        if(wB == 0) continue;
+
+        double wF = pixel_count-wB;
+        if(wF == 0) break;
+
+        sumB += (((double)t) / (bins)) * histogram[t];
+        double mB = sumB/wB;
+        double mF = (intensity_sum-sumB) / wF;
+
+        double varBetween = wB*wF*(mB-mF)*(mB-mF);
+
+        if(varBetween > maxVar){
+            maxVar = varBetween;
+            threshold = t;
+        }
+    }
+
+    float thr = (float)threshold / (bins - 1);
+    for(size_t i = 0; i < input.width*input.height*input.depth; i++) out.memory[i] = out.memory[i] > thr ? 1.0f : 0.0f;
+
+    free(histogram);
+
+    return out;
+}
+
+// gpu programs
+
+img_t img_program_gpu_greyscale(img_t input, int argc, char** argv){
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_output,image_output.memory,img_get_size(&input)); // same size, same buffer
+    img_gpu_program_t greyscale = img_gpu_load_program_glsl(&gpu,"glsl/greyscale.comp",8,8,1);
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&greyscale,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uniform_output_image));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_brightness(img_t input, int argc, char** argv){
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_output,image_output.memory,img_get_size(&input)); // same size, same buffer
+    img_gpu_program_t greyscale = img_gpu_load_program_glsl(&gpu,"glsl/brightness.comp",8,8,1);
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+    float uniform_brightness = argc > 0 ? atof(argv[1]): 0.;
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&greyscale,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uniform_output_image));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_brightness, sizeof(uniform_brightness));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_downscale(img_t input, int argc, char** argv){
+    float scale = argc > 0 ? atof(argv[1]) : .5;
+    img_t image_output = img_create_zero(ceil(input.width*scale),ceil(input.height*scale),input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, image_output.width,image_output.height,image_output.depth,image_output.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_output,image_output.memory,img_get_size(&image_output)); // same size, same buffer
+    img_gpu_program_t greyscale = img_gpu_load_program_glsl(&gpu,"glsl/downscale.comp",8,8,1);
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+    float uniform_scale = scale;
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&greyscale,image_output.width,image_output.height,image_output.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uniform_output_image));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_scale, sizeof(uniform_scale));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
 }

@@ -483,6 +483,24 @@ int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, ui
 	vkUpdateDescriptorSets(vkr->device, 1, &write, 0, NULL);
 }
 
+int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index){
+	VkDescriptorBufferInfo info = {
+		.buffer = buffer,
+	};
+
+	VkWriteDescriptorSet write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = vkr->descriptor_state.sets[0], // your one bindless set
+		.dstBinding = binding,                          // the bindless array binding
+		.dstArrayElement = index,         // the slot in the array
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.pImageInfo = &info
+	};
+
+	vkUpdateDescriptorSets(vkr->device, 1, &write, 0, NULL);
+}
+
 int vkr_create_command_pool(vkr_state* vkr){
 	vkr_qfi queue_family_index = vkr_find_queue_families(vkr->physical_device);
 	VkCommandPoolCreateInfo info_pool = {

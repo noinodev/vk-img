@@ -2,18 +2,22 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(set=0, binding = 0, rgba32f) uniform image2D images[];
+layout(set=0, binding = 1, rgba32f) uniform image2D images[];
+layout(set=0, binding = 2) buffer SSBO {
+    uint data[];
+} buffers[];
 
 layout(push_constant) uniform PushConstants {
-    uint lol;
+    uint image_input;
+    uint image_output;
 } pc;
 
 void main() {
     ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 size = imageSize(images[0]);
+    ivec2 size = imageSize(images[(pc.image_input)]);
     
     if (texel.x >= size.x || texel.y >= size.y) return;
     
-    vec4 col = imageLoad(images[0],texel);
-    imageStore(images[1],texel,vec4(vec3(col.r*0.2126 + col.g*0.7152 + col.b*0.0722),1.));
+    vec4 col = imageLoad(images[(pc.image_input)],texel);
+    imageStore(images[(pc.image_output)],texel,vec4(vec3(col.r*0.2126 + col.g*0.7152 + col.b*0.0722),1.));
 }

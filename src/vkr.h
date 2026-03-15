@@ -34,7 +34,7 @@ typedef struct {
 } vkr_qfi; // queue family indices
 
 typedef struct {
-	uint32_t width, height, depth, mips;
+	uint32_t width, height, depth;
     VkFormat format;
     VkImage image;
     VkDeviceMemory memory;
@@ -42,6 +42,12 @@ typedef struct {
 	VkImageViewType type;
 	VkImageLayout layout;
 } vkr_texture;
+
+typedef struct {
+    VkBuffer buffer;
+	VkDeviceMemory memory;
+	VkDeviceSize size;
+} vkr_buffer;
 
 enum VKR_DESCRIPTOR_BINDINGS {
 	VKR_DESCRIPTOR_TEXTURE,
@@ -56,11 +62,11 @@ enum VKR_DESCRIPTOR_BINDINGS {
 	VKR_DESCRIPTOR_COUNT
 };
 
-typedef struct {
+/*typedef struct {
     VkBuffer buffer;
     VkDeviceMemory memory;
     VkDeviceSize size;
-} vkr_ssbo; // shader storage buffer object
+} vkr_ssbo; // shader storage buffer object*/
 
 
 #define VKR_SBO_ALLOC 200*1024*1024
@@ -165,6 +171,7 @@ typedef struct {
 int vkr_generate_pipeline_layout(vkr_state* vkr);
 VkPipeline vkr_generate_pipeline_compute(vkr_state* vkr, VkShaderModule shader);
 int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, uint32_t index);
+int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index);
 
 typedef struct {
 	uint32_t binding;
@@ -241,6 +248,7 @@ void vkr_sbo_destroy(vkr_sbo* sbo); // ADD THIS FOR REALLOC !?
 //void vkr_copy_buffer_to_image(vkr_state* vkr, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t depth);
 void vkr_copy_image_to_buffer(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t depth);
 void vkr_copy_buffer_to_image(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t depth);
+void vkr_copy_buffer(vkr_state* vkr, VkCommandBuffer cmd, VkBuffer src, VkBuffer dest, VkDeviceSize size);
 //size_t vkr_texture_upload(vkr_state* vkr, const char* file);
 
 //vkr_ssbo vkr_create_ssbo(vkr_state* vkr, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
