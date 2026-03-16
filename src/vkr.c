@@ -4,7 +4,7 @@
 #include <cglm/cglm.h>
 #include <time.h>
 
-//#define DEBUG
+#define DEBUG
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,

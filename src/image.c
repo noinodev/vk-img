@@ -273,9 +273,13 @@ size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t wi
 void img_gpu_add_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size){
     size_t size_align = (size + (IMG_GPU_PUSH_ALIGNMENT - 1)) & ~(IMG_GPU_PUSH_ALIGNMENT - 1);
     size_t size_current = gpu->stages.pass[pass].push_size;
-    if(size_current + size_align > IMG_GPU_PUSH_MAX) return;
+    if(size_current + size_align > IMG_GPU_PUSH_MAX){
+        printf("exceeding push constant range\n");
+        return;
+    }
 
-    *(uint32_t*)(gpu->stages.pass[pass].push_data + size_current) = *(uint32_t*)data;
+    //*(uint32_t*)(gpu->stages.pass[pass].push_data + size_current) = *(uint32_t*)data;
+    memcpy((uint32_t*)(gpu->stages.pass[pass].push_data + size_current),(uint32_t*)data,size);
     gpu->stages.pass[pass].push_size += size_align;
 }
 
@@ -601,6 +605,87 @@ img_t img_program_otsu(img_t input, int argc, char** argv){
     return out;
 }
 
+
+img_t img_program_convolve(img_t input, int argc, char** argv){
+    float n = 1./9.; //
+    uint32_t fw = 3;
+    uint32_t fh = 3;
+    const float kernel_box[] = {
+        1,1,1,
+        1,1,1,
+        1,1,1
+    };
+
+    float* kernel = kernel_box;
+
+    uint32_t mode = 0;
+    if(argc > 1){
+        if(strcmp(argv[1],"crop")) mode = 0;
+        else if(strcmp(argv[1],"wrap")) mode = 1;
+        else if(strcmp(argv[1],"zero")) mode = 2;
+        else if(strcmp(argv[1],"repeat")) mode = 3;
+        else if(strcmp(argv[1],"extend")) mode = 4;
+    }
+
+    uint32_t normalize = 1;
+    img_t out = img_create_zero(input.width,input.height,input.depth,input.channels);
+    for(int iy = 0; iy < input.height; iy++){
+        for(int ix = 0; ix < input.width; ix++){
+            float accumulated[4] = {0};
+            float totalWeight = 0;
+
+            for(int kx = 0; kx < fw; kx++){
+                for(int ky = 0; ky < fh; ky++){
+                    int kxo = kx-fw/2;
+                    int kyo = ky-fh/2;
+
+                    int x = ix+kxo;
+                    int y = iy+kyo;
+
+                    size_t fi = kx+ky*fw;
+                    float w = kernel[fi];
+                    
+                    if(x < 0 || x >= input.width || y < 0 || y >= input.height){
+                        if(mode == 0){
+                            continue;
+                        }else if(mode == 1){
+                            x = abs(x) % (2*input.width);
+                            if(x >= input.width) x = 2*input.width - x - 1;
+                            y = abs(y) % (2*input.height);
+                            if(y >= input.height) y = 2*input.height - y - 1;
+                        }else if(mode == 2){
+                            totalWeight += w;
+                            continue;
+                        }else if(mode == 3){
+                            x = ((x % input.width)+input.width) % input.width;
+                            y = ((y % input.height)+input.height) % input.height;
+                        }else if(mode == 4){
+                            x = (int)fmin(fmax(x,0),input.width-1);
+                            y = (int)fmin(fmax(y,0),input.width-1);
+                        }
+                    }
+
+                    size_t i = (x+y*input.width)*input.channels;
+                    for(size_t j = 0; j < input.channels; j++){
+                        float sample = input.memory[i+j];
+                        accumulated[j] += sample * w;
+                    }
+
+                    totalWeight += w;
+                }
+            }
+
+            size_t i = (ix+iy*input.width)*input.channels;
+            for(size_t j = 0; j < input.channels; j++){
+                if(normalize == 1) accumulated[j] /= totalWeight;
+                out.memory[i+j] = accumulated[j];
+            }
+        }
+    }
+
+    return out;
+}
+
 // gpu programs
 
 img_t img_program_gpu_greyscale(img_t input, int argc, char** argv){
@@ -668,6 +753,45 @@ img_t img_program_gpu_downscale(img_t input, int argc, char** argv){
     img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uniform_input_image));
     img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uniform_output_image));
     img_gpu_add_stage_data(&gpu,stage_1, &uniform_scale, sizeof(uniform_scale));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_convolve(img_t input, int argc, char** argv){
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_output,image_output.memory,img_get_size(&input)); // same size, same buffer
+    img_gpu_program_t convolve = img_gpu_load_program_glsl(&gpu,"glsl/kernel.comp",8,8,1);
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+    uint32_t kernel_width = argc > 1 ? atoi(argv[1]) : 5;
+    uint32_t kernel_height = argc > 2 ? atoi(argv[2]) : 5;
+
+    float kernel_5x5[] = {
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1
+    };
+
+    for(size_t i = 3; i < argc; i++){
+        if(argc > i) kernel_5x5[i] = atof(argv[i]);
+    }
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&convolve,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_width, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_height, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, kernel_5x5, sizeof(kernel_5x5));
 
     img_gpu_dispatch(&gpu);
 
