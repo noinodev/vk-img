@@ -124,11 +124,15 @@ img_t img_program_histogram(img_t input, int argc, char** argv);
 img_t img_program_histogram_rgb(img_t input, int argc, char** argv);
 img_t img_program_otsu(img_t input, int argc, char** argv);
 img_t img_program_convolve(img_t input, int argc, char** argv);
+img_t img_program_minmax(img_t input, int argc, char** argv);
+img_t img_program_compound(img_t input, int argc, char** argv);
 
 img_t img_program_gpu_greyscale(img_t input, int argc, char** argv);
 img_t img_program_gpu_brightness(img_t input, int argc, char** argv);
 img_t img_program_gpu_downscale(img_t input, int argc, char** argv);
 img_t img_program_gpu_convolve(img_t input, int argc, char** argv);
+img_t img_program_gpu_minmax(img_t input, int argc, char** argv);
+img_t img_program_gpu_compound(img_t input, int argc, char** argv);
 
 
 static const img_program_t img_program_table[] = {
@@ -140,11 +144,15 @@ static const img_program_t img_program_table[] = {
     {"histogram_rgb", img_program_histogram_rgb,0},
     {"otsu", img_program_otsu,0},
     {"convolve",img_program_convolve,0},
+    {"minmax",img_program_minmax,0},
+    {"compound",img_program_compound,0},
 
     {"greyscale_gpu",img_program_gpu_greyscale,4},
     {"brightness_gpu",img_program_gpu_brightness,4},
     {"downscale",img_program_gpu_downscale,4},
-    {"convolve_gpu",img_program_gpu_convolve,4}
+    {"convolve_gpu",img_program_gpu_convolve,4},
+    {"minmax_gpu",img_program_gpu_minmax,4},
+    {"compound_gpu",img_program_gpu_compound,4}
 };
 
 #endif // image_h

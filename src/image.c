@@ -607,16 +607,6 @@ img_t img_program_otsu(img_t input, int argc, char** argv){
 
 
 img_t img_program_convolve(img_t input, int argc, char** argv){
-    float n = 1./9.; //
-    uint32_t fw = 3;
-    uint32_t fh = 3;
-    const float kernel_box[] = {
-        1,1,1,
-        1,1,1,
-        1,1,1
-    };
-
-    float* kernel = kernel_box;
 
     uint32_t mode = 0;
     if(argc > 1){
@@ -627,6 +617,21 @@ img_t img_program_convolve(img_t input, int argc, char** argv){
         else if(strcmp(argv[1],"extend")) mode = 4;
     }
 
+    uint32_t kernel_width = argc > 2 ? atoi(argv[2]) : 5;
+    uint32_t kernel_height = argc > 3 ? atoi(argv[3]) : 5;
+
+    float kernel_5x5[] = {
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1,
+        1,1,1,1,1
+    };
+
+    for(size_t i = 4; i < argc; i++){
+        if(argc > i) kernel_5x5[i] = atof(argv[i]);
+    }
+
     uint32_t normalize = 1;
     img_t out = img_create_zero(input.width,input.height,input.depth,input.channels);
     for(int iy = 0; iy < input.height; iy++){
@@ -634,16 +639,16 @@ img_t img_program_convolve(img_t input, int argc, char** argv){
             float accumulated[4] = {0};
             float totalWeight = 0;
 
-            for(int kx = 0; kx < fw; kx++){
-                for(int ky = 0; ky < fh; ky++){
-                    int kxo = kx-fw/2;
-                    int kyo = ky-fh/2;
+            for(int kx = 0; kx < kernel_width; kx++){
+                for(int ky = 0; ky < kernel_height; ky++){
+                    int kxo = kx-kernel_width/2;
+                    int kyo = ky-kernel_height/2;
 
                     int x = ix+kxo;
                     int y = iy+kyo;
 
-                    size_t fi = kx+ky*fw;
-                    float w = kernel[fi];
+                    size_t fi = kx+ky*kernel_width;
+                    float w = kernel_5x5[fi];
                     
                     if(x < 0 || x >= input.width || y < 0 || y >= input.height){
                         if(mode == 0){
@@ -684,6 +689,108 @@ img_t img_program_convolve(img_t input, int argc, char** argv){
     }
 
     return out;
+}
+
+img_t img_program_minmax(img_t input, int argc, char** argv){
+    uint32_t mode = 0;
+    if(argc > 1){
+        if(strcmp(argv[1],"erode")) mode = 0;
+        else if(strcmp(argv[1],"dilate")) mode = 1;
+    }
+
+    uint32_t kernel_width = argc > 2 ? atoi(argv[2]) : 3;
+    uint32_t kernel_height = argc > 3 ? atoi(argv[3]) : 3;
+
+    float kernel_3x3[] = {
+        0,1,0,
+        1,1,1,
+        0,1,0
+    };
+
+    for(size_t i = 4; i < argc; i++){
+        if(argc > i) kernel_3x3[i] = atof(argv[i]);
+    }
+
+    const float coeff[] = {.2126,.7152,.0722,0.}; // rgba
+    const size_t coeff_n = sizeof(coeff)/sizeof(coeff[0]);
+
+    img_t out = img_create_zero(input.width,input.height,input.depth,input.channels);
+    for(int iy = 0; iy < input.height; iy++){
+        for(int ix = 0; ix < input.width; ix++){
+            float minmaxValue = (float)mode;
+            float minmaxColour[4] = {0};
+
+            for(int kx = 0; kx < kernel_width; kx++){
+                for(int ky = 0; ky < kernel_height; ky++){
+                    int kxo = kx-kernel_width/2;
+                    int kyo = ky-kernel_height/2;
+
+                    int x = ix+kxo;
+                    int y = iy+kyo;
+
+                    size_t fi = kx+ky*kernel_width;
+                    if(kernel_3x3[fi] == 0.) continue;
+                    if(x < 0 || x >= input.width || y < 0 || y >= input.height)continue;
+
+                    float grey = 0.;
+
+                    size_t i = (x+y*input.width)*input.channels;
+
+                    for(size_t k = 0; k < coeff_n; k++){
+                        uint32_t ch = (k < input.channels) ? k : input.channels-1;
+                        grey += input.memory[i+ch] * coeff[k];
+                    }
+
+                    if(mode == 0 && grey > minmaxValue){
+                        minmaxValue = grey;
+                        for(size_t j = 0; j < input.channels; j++) minmaxColour[j] = input.memory[i+j];
+                    }
+                    if(mode == 1 && grey < minmaxValue){
+                        minmaxValue = grey;
+                        for(size_t j = 0; j < input.channels; j++) minmaxColour[j] = input.memory[i+j];
+                    }
+                }
+            }
+
+            size_t i = (ix+iy*input.width)*input.channels;
+            for(size_t j = 0; j < input.channels; j++){
+                out.memory[i+j] = minmaxColour[j];
+            }
+        }
+    }
+
+    return out;
+}
+
+img_t img_program_compound(img_t input, int argc, char** argv){
+    uint32_t mode = 0;
+    if(argc > 1){
+        if(strcmp(argv[1],"open")) mode = 0;
+        else if(strcmp(argv[1],"close")) mode = 1;
+    }
+
+    uint32_t kernel_width = argc > 2 ? atoi(argv[2]) : 3;
+    uint32_t kernel_height = argc > 3 ? atoi(argv[3]) : 3;
+
+    float kernel_3x3[] = {
+        0,1,0,
+        1,1,1,
+        0,1,0
+    };
+
+    for(size_t i = 4; i < argc; i++){
+        if(argc > i) kernel_3x3[i] = atof(argv[i]);
+    }
+
+    char* modes[] = {"dilate","erode"};
+    char* args1[] = {"minmax",modes[mode]};
+    img_t first = img_program_minmax(input,2,args1);
+    char* args2[] = {"minmax",modes[1-mode]};
+    img_t second = img_program_minmax(first,2,args2);
+    img_destroy(&first);
+
+
+    return second;
 }
 
 // gpu programs
@@ -792,6 +899,108 @@ img_t img_program_gpu_convolve(img_t input, int argc, char** argv){
     img_gpu_add_stage_data(&gpu,stage_1, &kernel_width, sizeof(uint32_t));
     img_gpu_add_stage_data(&gpu,stage_1, &kernel_height, sizeof(uint32_t));
     img_gpu_add_stage_data(&gpu,stage_1, kernel_5x5, sizeof(kernel_5x5));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_minmax(img_t input, int argc, char** argv){
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_output,image_output.memory,img_get_size(&input)); // same size, same buffer
+    img_gpu_program_t convolve = img_gpu_load_program_glsl(&gpu,"glsl/minmax.comp",8,8,1);
+
+    uint32_t mode = 0;
+    if(argc > 1){
+        if(strcmp(argv[1],"erode")) mode = 0;
+        else if(strcmp(argv[1],"dilate")) mode = 1;
+    }
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+    uint32_t kernel_width = argc > 2 ? atoi(argv[2]) : 5;
+    uint32_t kernel_height = argc > 3 ? atoi(argv[3]) : 5;
+
+    float kernel_5x5[] = {
+        0,0,0,0,0,
+        0,1,1,1,0,
+        0,1,1,1,0,
+        0,1,1,1,0,
+        0,0,0,0,0
+    };
+
+    for(size_t i = 3; i < argc; i++){
+        if(argc > i) kernel_5x5[i] = atof(argv[i]);
+    }
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&convolve,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &mode, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_width, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_height, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, kernel_5x5, sizeof(kernel_5x5));
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_compound(img_t input, int argc, char** argv){
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
+
+    img_gpu_t gpu = img_gpu_init();
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, 0, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, 1, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+    size_t download = img_gpu_download(&gpu,gpu_image_input,image_output.memory,img_get_size(&input)); // same size, same buffer
+    img_gpu_program_t convolve = img_gpu_load_program_glsl(&gpu,"glsl/minmax.comp",8,8,1);
+
+    uint32_t mode = 0;
+    if(argc > 1){
+        if(strcmp(argv[1],"open")) mode = 0;
+        else if(strcmp(argv[1],"close")) mode = 1;
+    }
+
+    uint32_t altmode = 1-mode;
+
+    uint32_t uniform_input_image = 0; // push constant
+    uint32_t uniform_output_image = 1;
+    uint32_t kernel_width = argc > 2 ? atoi(argv[2]) : 5;
+    uint32_t kernel_height = argc > 3 ? atoi(argv[3]) : 5;
+
+    float kernel_5x5[] = {
+        0,0,0,0,0,
+        0,1,1,1,0,
+        0,1,1,1,0,
+        0,1,1,1,0,
+        0,0,0,0,0
+    };
+
+    for(size_t i = 3; i < argc; i++){
+        if(argc > i) kernel_5x5[i] = atof(argv[i]);
+    }
+
+    size_t stage_1 = img_gpu_add_stage(&gpu,&convolve,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_1,&uniform_input_image,sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &uniform_output_image, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &mode, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_width, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, &kernel_height, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_1, kernel_5x5, sizeof(kernel_5x5));
+
+    size_t stage_2 = img_gpu_add_stage(&gpu,&convolve,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_2,&uniform_output_image,sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_2, &uniform_input_image, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_2, &altmode, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_2, &kernel_width, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_2, &kernel_height, sizeof(uint32_t));
+    img_gpu_add_stage_data(&gpu,stage_2, kernel_5x5, sizeof(kernel_5x5)); // ping pong buffer
 
     img_gpu_dispatch(&gpu);
 

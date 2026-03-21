@@ -1,0 +1,47 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set=0, binding = 1, rgba32f) uniform image2D images[];
+layout(set=0, binding = 2) buffer SSBO {
+    uint data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint image_input;
+    uint image_output;
+    uint mode;
+    uint kernel_width;
+    uint kernel_height;
+
+    float k[25]; // fast kernel up to 5x5
+} pc;
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(images[(pc.image_input)]);
+    
+    if (texel.x >= size.x || texel.y >= size.y) return;
+    
+    float minmaxValue = float(pc.mode);
+    vec3 minmaxColour = vec3(0.);
+    for(int x = 0; x < pc.kernel_width; x++){
+        for(int y = 0; y < pc.kernel_height; y++){
+            float w = pc.k[x+y*pc.kernel_width];
+            if(w == 0.) continue;
+            ivec2 sample_pos = texel+ivec2(x-pc.kernel_width/2, y-pc.kernel_height/2);
+            if(sample_pos.x < 0 || sample_pos.x >= size.x || sample_pos.y < 0 || sample_pos.y >= size.y) continue;
+            
+            vec3 col = imageLoad(images[(pc.image_input)], sample_pos).rgb;
+            float value = col.r*0.2126 + col.g*0.7152 + col.b*0.0722;
+
+            if((pc.mode == 0 && value > minmaxValue) || (pc.mode == 1 && value < minmaxValue)){
+                minmaxValue = value;
+                minmaxColour = col;
+            }
+
+        }
+    }
+
+    imageStore(images[(pc.image_output)],texel, vec4(minmaxColour,1.) );
+}
