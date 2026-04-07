@@ -35,7 +35,7 @@ void main() {
             vec3 col = imageLoad(images[(pc.image_input)], sample_pos).rgb;
             float value = col.r*0.2126 + col.g*0.7152 + col.b*0.0722;
 
-            if((pc.mode == 0 && value > minmaxValue) || (pc.mode == 1 && value < minmaxValue)){
+            if((pc.mode == 0 && value >= minmaxValue) || (pc.mode == 1 && value <= minmaxValue)){
                 minmaxValue = value;
                 minmaxColour = col;
             }

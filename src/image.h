@@ -133,6 +133,7 @@ img_t img_program_gpu_downscale(img_t input, int argc, char** argv);
 img_t img_program_gpu_convolve(img_t input, int argc, char** argv);
 img_t img_program_gpu_minmax(img_t input, int argc, char** argv);
 img_t img_program_gpu_compound(img_t input, int argc, char** argv);
+img_t img_program_gpu_hog(img_t input, int argc, char** argv);
 
 
 static const img_program_t img_program_table[] = {
@@ -152,7 +153,8 @@ static const img_program_t img_program_table[] = {
     {"downscale",img_program_gpu_downscale,4},
     {"convolve_gpu",img_program_gpu_convolve,4},
     {"minmax_gpu",img_program_gpu_minmax,4},
-    {"compound_gpu",img_program_gpu_compound,4}
+    {"compound_gpu",img_program_gpu_compound,4},
+    {"sobel",img_program_gpu_hog,4}
 };
 
 #endif // image_h

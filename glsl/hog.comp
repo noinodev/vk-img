@@ -1,0 +1,47 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 1, local_size_y = 1) in;
+
+layout(set=0, binding = 1, rgba32f) uniform image3D images[];
+layout(set=0, binding = 2) buffer SSBO {
+    uint data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint gradients;
+    uint histogram;
+    uint cellsize;
+} pc;
+
+const float PI = 3.14159;
+
+void main() {
+    ivec2 cell = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 cellsPerDim = imageSize(images[(pc.gradients)]).rg / ivec2(pc.cellsize);
+
+    if (cell.x >= cellsPerDim.x || cell.y >= cellsPerDim.y) return;
+
+    float histogram[9] = float[9](0.,0.,0.,0.,0.,0.,0.,0.,0.);
+    float binsize = 9. / PI;
+    
+    for(int x = 0; x < pc.cellsize; x++){
+        for(int y = 0; y < pc.cellsize; y++){
+            ivec2 sample_pos = clamp(cell * ivec2(pc.cellsize) + ivec2(x,y),ivec2(0),(cellsPerDim*ivec2(pc.cellsize-1)));
+            vec2 v = imageLoad(images[pc.gradients],ivec3(sample_pos,0)).rg;
+
+            float bin = v.g * binsize;
+            int b0 = int(floor(bin));
+            int b1 = b0 + 1;
+            float t = fract(bin);
+
+            b0 = b0 % 9;
+            b1 = b1 % 9;
+
+            float mag = v.r;
+            histogram[b0] += mag * (1.-t);
+            histogram[b1] += mag * t;
+        }
+    }
+
+    for(int i = 0; i < 9; i++) imageStore(images[(pc.histogram)],ivec3(cell,i), vec4(histogram[i]));
+}

@@ -178,7 +178,15 @@ size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, 
     img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
     buffer->type = IMG_GPU_TYPE_IMAGE;
 
-    VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    VkFormat format; 
+    if(channels == 4) format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    else if(channels == 3) format = VK_FORMAT_R32G32B32_SFLOAT;
+    else if(channels == 2) format = VK_FORMAT_R32G32_SFLOAT;
+    else if(channels == 1) format = VK_FORMAT_R32_SFLOAT;
+    else{
+        printf("invalid channel count for gpu image allocation. aborting.\n");
+        abort();
+    }
 
     buffer->image = vkr_create_texture(
         &gpu->vkr,width,height,depth,format, VK_IMAGE_TILING_OPTIMAL, 
@@ -741,11 +749,11 @@ img_t img_program_minmax(img_t input, int argc, char** argv){
                         grey += input.memory[i+ch] * coeff[k];
                     }
 
-                    if(mode == 0 && grey > minmaxValue){
+                    if(mode == 0 && grey >= minmaxValue){
                         minmaxValue = grey;
                         for(size_t j = 0; j < input.channels; j++) minmaxColour[j] = input.memory[i+j];
                     }
-                    if(mode == 1 && grey < minmaxValue){
+                    if(mode == 1 && grey <= minmaxValue){
                         minmaxValue = grey;
                         for(size_t j = 0; j < input.channels; j++) minmaxColour[j] = input.memory[i+j];
                     }
@@ -1001,6 +1009,91 @@ img_t img_program_gpu_compound(img_t input, int argc, char** argv){
     img_gpu_add_stage_data(&gpu,stage_2, &kernel_width, sizeof(uint32_t));
     img_gpu_add_stage_data(&gpu,stage_2, &kernel_height, sizeof(uint32_t));
     img_gpu_add_stage_data(&gpu,stage_2, kernel_5x5, sizeof(kernel_5x5)); // ping pong buffer
+
+    img_gpu_dispatch(&gpu);
+
+    return image_output;
+}
+
+img_t img_program_gpu_hog(img_t input, int argc, char** argv){
+
+    uint32_t window_w = 64;
+    uint32_t window_h = 128;
+    uint32_t workgroup = 8;
+    uint32_t block = 2;
+    uint32_t stride = 1;
+
+
+    img_t image_output = img_create_zero(input.width,input.height,input.depth,1);
+
+    img_gpu_t gpu = img_gpu_init();
+    uint32_t uniform_input_image = 0;
+    uint32_t uniform_output_image = 1;
+    size_t gpu_image_input = img_gpu_allocate_image(&gpu, uniform_input_image, input.width,input.height,input.depth,input.channels);
+    size_t gpu_image_output = img_gpu_allocate_image(&gpu, uniform_output_image, input.width,input.height,input.depth,input.channels);
+    size_t upload = img_gpu_upload(&gpu,gpu_image_input,input.memory,img_get_size(&input));
+
+    // greyscale step
+
+    img_gpu_program_t greyscale = img_gpu_load_program_glsl(&gpu,"glsl/greyscale.comp",workgroup,workgroup,1);
+    size_t stage_greyscale = img_gpu_add_stage(&gpu,&greyscale,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_greyscale,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_greyscale, &uniform_output_image, sizeof(uniform_output_image));
+
+    // sobel filter step
+
+    img_gpu_program_t sobel = img_gpu_load_program_glsl(&gpu,"glsl/sobel.comp",workgroup,workgroup,1);
+    float kernel_sobel_x[] = {
+        -1,0,1,
+        -2,0,2,
+        -1,0,1
+    };
+    float kernel_sobel_y[] = {
+        -1,-2,-1,
+        0,0,0,
+        1,2,1
+    };
+
+    size_t stage_sobel = img_gpu_add_stage(&gpu,&sobel,input.width,input.height,input.depth);
+    img_gpu_add_stage_data(&gpu,stage_sobel,&uniform_output_image,sizeof(uniform_output_image));
+    img_gpu_add_stage_data(&gpu,stage_sobel,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_sobel, kernel_sobel_x, sizeof(kernel_sobel_x));
+    img_gpu_add_stage_data(&gpu,stage_sobel, kernel_sobel_y, sizeof(kernel_sobel_y));
+
+    img_gpu_program_t hog = img_gpu_load_program_glsl(&gpu,"glsl/hog.comp",1,1,1);
+    uint32_t cellsize = 8;
+    uint32_t bins = 9;
+    uint32_t cell_width = input.width / cellsize;
+    uint32_t cell_height = input.height / cellsize;
+    uint32_t uniform_histogram_image = 2;
+    size_t gpu_image_histogram = img_gpu_allocate_image(&gpu, uniform_histogram_image, cell_width, cell_height, 9 ,1);
+    size_t stage_hog = img_gpu_add_stage(&gpu,&hog,cell_width, cell_height ,1);
+    img_gpu_add_stage_data(&gpu,stage_hog,&uniform_input_image,sizeof(uniform_input_image));
+    img_gpu_add_stage_data(&gpu,stage_hog,&uniform_histogram_image,sizeof(uniform_histogram_image));
+    img_gpu_add_stage_data(&gpu,stage_hog,&cellsize,sizeof(cellsize));
+
+    uint32_t uniform_block_image = 3;
+    uint32_t block_width = cell_width - 1;
+    uint32_t block_height = cell_height - 1;
+    img_gpu_program_t hog_normalize = img_gpu_load_program_glsl(&gpu,"glsl/normalize.comp",1,1,1);
+    size_t gpu_image_blocks = img_gpu_allocate_image(&gpu, uniform_block_image, block_width, block_height, 36, 1);
+    size_t stage_blocks = img_gpu_add_stage(&gpu,&hog_normalize,block_width, block_height,1);
+    img_gpu_add_stage_data(&gpu,stage_blocks,&uniform_histogram_image,sizeof(uniform_histogram_image));
+    img_gpu_add_stage_data(&gpu,stage_blocks,&uniform_block_image,sizeof(uniform_block_image));
+
+    uint32_t uniform_vector_image = 4;
+    uint32_t window_width = window_w / cellsize - 1;
+    uint32_t window_height = window_h / cellsize - 1;
+    uint32_t feature_length = window_width * window_height * 36;
+    uint32_t dispatch_width = block_width - window_width;
+    uint32_t dispatch_height = block_height - window_height; 
+    img_gpu_program_t hog_window = img_gpu_load_program_glsl(&gpu,"glsl/window.comp",1,1,1);
+    size_t gpu_image_vectors = img_gpu_allocate_image(&gpu,uniform_vector_image,dispatch_width,dispatch_height,feature_length,1);
+    //size_t gpu_buffer_vectors = img_gpu_allocate_buffer(&gpu,0,dispatch_width * dispatch_height * feature_length
+
+    size_t download = img_gpu_download(&gpu,gpu_image_histogram,image_output.memory,img_get_size(&image_output)); // same size, same buffer
+
+
 
     img_gpu_dispatch(&gpu);
 
