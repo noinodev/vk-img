@@ -207,6 +207,12 @@ int lua_gpu_dispatch(lua_State* L){
     return 0;
 }
 
+int lua_gpu_reset(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    img_gpu_reset(gpu);
+    return 0;
+}
+
 static const luaL_Reg img_lib[] = {
     {"create_fill",lua_img_create_fill},
     {"create_zero",lua_img_create_zero},
@@ -230,6 +236,7 @@ static const luaL_Reg img_lib[] = {
     {"gpu_add_stage",       lua_gpu_add_stage},
     {"gpu_add_stage_data",  lua_gpu_add_stage_data},
     {"gpu_dispatch",        lua_gpu_dispatch},
+    {"gpu_reset",lua_gpu_reset},
     {NULL, NULL}
 };
 

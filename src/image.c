@@ -377,6 +377,26 @@ void img_gpu_dispatch(img_gpu_t* gpu){
 
 }
 
+void img_gpu_reset(img_gpu_t* gpu){
+    for(size_t i = 0; i < gpu->device.count; i++) {
+        img_gpu_buffer_t* b = &gpu->device.buffer[i];
+        if(b->type == IMG_GPU_TYPE_IMAGE) {
+            vkr_destroy_texture(&gpu->vkr, &b->image);
+        } else if(b->type == IMG_GPU_TYPE_BUFFER) {
+            vkr_destroy_buffer(&gpu->vkr, &b->buffer);
+        }
+    }
+    
+    for(size_t i = 0; i < gpu->host.count; i++) {
+        img_gpu_buffer_t* b = &gpu->host.buffer[i];
+        vkr_destroy_buffer(&gpu->vkr, &b->buffer);
+    }
+
+    gpu->device.count = 0;
+    gpu->host.count = 0;
+    gpu->stages.count = 0;
+}
+
 // processors
 
 img_t img_program_greyscale(img_t input, int argc, char** argv){

@@ -32,6 +32,7 @@ int lua_gpu_download(lua_State* L);
 int lua_gpu_add_stage(lua_State* L);
 int lua_gpu_add_stage_data(lua_State* L);
 int lua_gpu_dispatch(lua_State* L);
+int lua_gpu_reset(lua_State* L);
 
 int luaopen_img(lua_State* L);
 

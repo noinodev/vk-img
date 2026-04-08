@@ -5,6 +5,7 @@
 -I/home/nate/dev/libs/cglm/include
 -L/home/nate/dev/libs/glfw/build/src
 -L/home/nate/dev/libs/lua-5.5.0/src
+-L/home/nate/dev/libs/vulkan/x86_64/lib
 -llua
 -lvulkan
 -lglfw3

@@ -285,6 +285,9 @@ vkr_texture vkr_create_texture_array(
 	VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
 	VkMemoryPropertyFlags properties, VkImageAspectFlags flags);
 
+void vkr_destroy_texture(vkr_state* vkr, vkr_texture* texture);
+void vkr_destroy_buffer(vkr_state* vkr, vkr_buffer* buffer);
+
 int vkr_destroy(vkr_state* vkr);
 int vkr_bind_view(vkr_state* vkr, uint32_t binding, VkImageView view, uint32_t index, VkSampler sampler);
 int vkr_bind_pipeline(vkr_state* vkr, VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineBindPoint bind_point);

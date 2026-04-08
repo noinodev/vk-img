@@ -107,6 +107,7 @@ void img_gpu_free(img_gpu_t* gpu, img_gpu_buffer_t* buffer);
 size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t width, uint32_t height, uint32_t depth);
 void img_gpu_add_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size);
 void img_gpu_dispatch(img_gpu_t* gpu);
+void img_gpu_reset(img_gpu_t* gpu);
 
 // programs
 

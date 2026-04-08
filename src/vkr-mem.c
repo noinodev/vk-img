@@ -342,3 +342,16 @@ vkr_texture vkr_create_texture(vkr_state* vkr, uint32_t width, uint32_t height, 
 
 	return texture;
 }
+
+void vkr_destroy_texture(vkr_state* vkr, vkr_texture* texture){
+	vkDestroyImageView(vkr->device,texture->view,NULL);
+	vkDestroyImage(vkr->device,texture->image,NULL);
+	vkFreeMemory(vkr->device,texture->memory,NULL);
+	*texture = (vkr_texture){0};
+}
+
+void vkr_destroy_buffer(vkr_state* vkr, vkr_buffer* buffer){
+	vkDestroyBuffer(vkr->device,buffer->buffer,NULL);
+	vkFreeMemory(vkr->device,buffer->memory,NULL);
+	*buffer = (vkr_buffer){0};
+}	
