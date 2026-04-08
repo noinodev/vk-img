@@ -1,10 +1,10 @@
--I/home/nate/glfw/include
+-I/home/nate/dev/libs/glfw/include
 -I/usr/include
 -I/usr/include/X11
--I/home/nate/vulkan/x86_64/include
--I/home/nate/cglm/include
--L/home/nate/glfw/build/src
--L/home/nate/lua-5.5.0/src
+-I/home/nate/dev/libs/vulkan/x86_64/include
+-I/home/nate/dev/libs/cglm/include
+-L/home/nate/dev/libs/glfw/build/src
+-L/home/nate/dev/libs/lua-5.5.0/src
 -llua
 -lvulkan
 -lglfw3

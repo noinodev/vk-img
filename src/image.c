@@ -178,15 +178,7 @@ size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, 
     img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
     buffer->type = IMG_GPU_TYPE_IMAGE;
 
-    VkFormat format; 
-    if(channels == 4) format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    else if(channels == 3) format = VK_FORMAT_R32G32B32_SFLOAT;
-    else if(channels == 2) format = VK_FORMAT_R32G32_SFLOAT;
-    else if(channels == 1) format = VK_FORMAT_R32_SFLOAT;
-    else{
-        printf("invalid channel count for gpu image allocation. aborting.\n");
-        abort();
-    }
+    VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
 
     buffer->image = vkr_create_texture(
         &gpu->vkr,width,height,depth,format, VK_IMAGE_TILING_OPTIMAL, 

@@ -20,12 +20,16 @@
 
 #define IMAGE_IMPL
 #include "image.h"
+#include "image-lua.h"
 
 int main(int argc, char** argv){
 
 	int status;
 	lua_State* L = luaL_newstate();
 	luaL_openlibs(L);
+
+	luaL_requiref(L, "img", luaopen_img, 1);
+	lua_pop(L, 1);
 
 	if(argc < 2){
 		printf("usage: %s /path/to/script.lua\n",argv[0]);
@@ -37,6 +41,7 @@ int main(int argc, char** argv){
 		printf("err: %s\n",lua_tostring(L,-1));
 		return 1;
 	}
+	lua_close(L);
 
 	return 0;
 }

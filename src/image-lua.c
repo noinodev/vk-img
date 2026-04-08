@@ -44,24 +44,63 @@ int lua_img_destroy(lua_State* L){
 }*/
 
 int lua_img_get_size(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L,img_get_size(image));
+    return 1;
+}
 
+int lua_img_width(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L, image->width);
+    return 1;
+}
+int lua_img_height(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L, image->height);
+    return 1;
+}
+int lua_img_depth(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L, image->depth);
+    return 1;
+}
+int lua_img_channels(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L, image->channels);
+    return 1;
 }
 
 
 int lua_img_create_from_image(lua_State* L){
+    char* file = luaL_checkstring(L,1);
 
+    img_t* image = lua_newuserdata(L,sizeof(img_t));
+    *image = img_create_from_image(file,4);
+    return 1;
 }
 
 int lua_img_write_as_image(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    char* file = luaL_checkstring(L,2);
 
+    img_write_as_image(image,file);
+    return 0;
 }
 
 int lua_img_create_from_binary(lua_State* L){
+    char* file = luaL_checkstring(L,1);
 
+    img_t* image = lua_newuserdata(L,sizeof(img_t));
+    *image = img_create_from_binary(file);
+    return 1;
 }
 
 int lua_img_write_as_binary(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    char* file = luaL_checkstring(L,2);
 
+    img_write_as_binary(image,file);
+    return 0;
 }
 
 
@@ -169,6 +208,19 @@ int lua_gpu_dispatch(lua_State* L){
 }
 
 static const luaL_Reg img_lib[] = {
+    {"create_fill",lua_img_create_fill},
+    {"create_zero",lua_img_create_zero},
+    {"destroy",lua_img_destroy},
+    {"size",lua_img_get_size},
+    {"width",lua_img_width},
+    {"height",lua_img_height},
+    {"depth",lua_img_depth},
+    {"channels",lua_img_channels},
+    {"create_from_image",lua_img_create_from_image},
+    {"create_from_binary",lua_img_create_from_binary},
+    {"write_as_image",lua_img_write_as_image},
+    {"write_as_binary",lua_img_write_as_binary},
+
     {"gpu_init",            lua_gpu_init},
     {"gpu_load_program",    lua_gpu_load_program_glsl},
     {"gpu_allocate_image",  lua_gpu_allocate_image},
