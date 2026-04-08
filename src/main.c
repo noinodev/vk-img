@@ -9,6 +9,9 @@
 
 #include "stb_image.h"
 #include <shaderc/shaderc.h>
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
 
 #include "vkr.h"
 #define CGLM_SIMD_ENABLE
@@ -20,6 +23,26 @@
 
 int main(int argc, char** argv){
 
+	int status;
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+
+	if(argc < 2){
+		printf("usage: %s /path/to/script.lua\n",argv[0]);
+		return 1;
+	}
+
+	status = luaL_dofile(L,argv[1]);
+	if(status){
+		printf("err: %s\n",lua_tostring(L,-1));
+		return 1;
+	}
+
+	return 0;
+}
+
+/*int main(int argc, char** argv){
+
 	uint32_t input;
 	const char* file_output_default = "output.bmp";
 
@@ -30,11 +53,11 @@ int main(int argc, char** argv){
 
 	uint32_t cpu_program = UINT32_MAX;
 
-	/*
+	
 		-i input.xyz
 		-o output
 		-p program, including gpu: gpu_program.comp / .glsl / .spv (shell call to auto compile glsl?)
-	*/
+	
 
 	uint8_t arg_gather = 0;
 	uint8_t arg_count = 0;
@@ -61,14 +84,15 @@ int main(int argc, char** argv){
 
 		// check cpu programs
 		for(uint32_t i = 0; i < sizeof(img_program_table)/sizeof(img_program_table[0]); i++){
-			if(strcmp(program_name,img_program_table[i].name) == 0 && strlen(program_name) == strlen(img_program_table[i].name)){
+			if(strcmp(program_name,img_program_table[i].name) == 0 && s#include <lauxlib.h>
+#include <lualib.h>trlen(program_name) == strlen(img_program_table[i].name)){
 				cpu_program = i;
 				break;
 			}
 		}
 
-		img_t image_input;
-		img_t image_output;
+		img_t image_input = {0};
+		img_t image_output = {0};
 
 		time_t time_start = 0;
 		time_t time_end = 0;
@@ -98,4 +122,4 @@ int main(int argc, char** argv){
 		img_destroy(&image_output);
 	}
 	return 0;
-}
+}*/
