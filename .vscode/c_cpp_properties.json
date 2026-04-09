@@ -4,7 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/nate/dev/libs/**"
+                "/home/nate/dev/libs/**",
+                "/home/nate/dev/libs/lua-5.5.0/src/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

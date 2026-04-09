@@ -1,4 +1,5 @@
 local img = require("img")
+
 local gpu = img.gpu_init()
 
 local input = img.create_from_image("res/gold.jpg")
