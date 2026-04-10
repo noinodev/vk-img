@@ -483,9 +483,10 @@ int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, ui
 	vkUpdateDescriptorSets(vkr->device, 1, &write, 0, NULL);
 }
 
-int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index){
+int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index, size_t size){
 	VkDescriptorBufferInfo info = {
 		.buffer = buffer,
+		.range = size
 	};
 
 	VkWriteDescriptorSet write = {
@@ -495,7 +496,7 @@ int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, u
 		.dstArrayElement = index,         // the slot in the array
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.pImageInfo = &info
+		.pBufferInfo = &info
 	};
 
 	vkUpdateDescriptorSets(vkr->device, 1, &write, 0, NULL);

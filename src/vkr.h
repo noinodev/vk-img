@@ -171,7 +171,7 @@ typedef struct {
 int vkr_generate_pipeline_layout(vkr_state* vkr);
 VkPipeline vkr_generate_pipeline_compute(vkr_state* vkr, VkShaderModule shader);
 int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, uint32_t index);
-int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index);
+int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, uint32_t index, size_t size);
 
 typedef struct {
 	uint32_t binding;

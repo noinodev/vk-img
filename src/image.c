@@ -98,7 +98,7 @@ img_t img_create_from_binary(const char* file){
 }
 
 void img_write_as_binary(img_t* img, const char* file){
-    FILE* f = fopen(file,"w");
+    FILE* f = fopen(file,"wb");
     fwrite(img,sizeof(img),1,f);
     fwrite(img->memory, sizeof(float), img->width*img->height*img->depth*img->channels, f);
     fclose(f);
@@ -205,7 +205,7 @@ size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size){
         &buffer->buffer.buffer, &buffer->buffer.memory
     );
 
-    vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,binding);
+    vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,binding,size);
 
     return count;
 }
