@@ -79,11 +79,11 @@ $(BUILD_DIR)/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile Shaders
-$(SPIRV_DIR)/%.spv: glsl/%
-	@$(MKDIR)
-	$(GLSLC) $< -o $@
+#$(SPIRV_DIR)/%.spv: glsl/%
+#	@$(MKDIR)
+#	$(GLSLC) $< -o $@
 
-shaders: $(SHADER_SPV)
+#shaders: $(SHADER_SPV)
 
 # Include dependency files
 -include $(DEP)

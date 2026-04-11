@@ -28,6 +28,7 @@ img_t img_create_from_image(const char* file, uint32_t channels);
 void img_write_as_image(img_t* img, const char* file);
 img_t img_create_from_binary(const char* file);
 void img_write_as_binary(img_t* img, const char* file);
+void img_write_as_binary_raw(img_t* img, const char* file, const char* mode);
 
 // gpu
 
@@ -91,15 +92,11 @@ typedef struct {
     } stages;
 } img_gpu_t;
 
-static const vkr_descriptor_info img_gpu_descriptors[] = {
-    {IMG_GPU_TYPE_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES},
-    {IMG_GPU_TYPE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}
-};
-
 img_gpu_t img_gpu_init();
 img_gpu_program_t img_gpu_load_program_glsl(img_gpu_t* gpu, const char* shader_file, uint32_t width, uint32_t height, uint32_t depth); // good candidate for reflection
 size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, uint32_t height, uint32_t depth, uint32_t channels);
 size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size);
+//void img_gpu_bind_buffer(img_gpu_t* gpu, size_t index);
 size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size);
 size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size);
 void img_gpu_free(img_gpu_t* gpu, img_gpu_buffer_t* buffer);

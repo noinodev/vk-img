@@ -172,7 +172,10 @@ int vkr_init(vkr_state* vkr){
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
 		.descriptorBindingPartiallyBound = VK_TRUE,
 		.runtimeDescriptorArray = VK_TRUE,
-		.shaderSampledImageArrayNonUniformIndexing = VK_TRUE
+		.shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+		.shaderStorageImageArrayNonUniformIndexing = VK_TRUE,
+		.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
+		.descriptorBindingVariableDescriptorCount = VK_TRUE
 	};
 
 	VkPhysicalDeviceDynamicRenderingFeatures dynamic = {
@@ -493,7 +496,7 @@ int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, u
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.dstSet = vkr->descriptor_state.sets[0], // your one bindless set
 		.dstBinding = binding,                          // the bindless array binding
-		.dstArrayElement = index,         // the slot in the array
+		.dstArrayElement = index,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.pBufferInfo = &info
@@ -549,7 +552,8 @@ int vkr_generate_descriptor_layout(VkDevice device, vkr_descriptor_info* binding
     }
 
 	VkDescriptorBindingFlags bindingFlags = 
-    VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+    VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
 	VkDescriptorBindingFlags* bindingFlagsArr = malloc(sizeof(VkDescriptorBindingFlags) * binding_count);
 	for (uint32_t i = 0; i < binding_count; i++) bindingFlagsArr[i] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
@@ -621,20 +625,8 @@ int vkr_generate_descriptor_sets(VkDevice device,VkDescriptorPool pool,VkDescrip
 }
 
 int vkr_generate_descriptor_state(vkr_state *vkr, uint32_t binding_count, vkr_descriptor_info* descriptors){
-	/*vkr_descriptor_info descriptors[] = {
-		{VKR_DESCRIPTOR_TEXTURE, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_TARGET, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_MATERIAL, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_INSTANCE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_VERTEX_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_CUBES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_CUBES_DEPTH, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_TEXTURE_ARRAY, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, MAX_TEXTURES},
-		{VKR_DESCRIPTOR_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}
 
-		// more
-	};*/
-
-	uint32_t set_count = MAX_TEXTURES;
+	uint32_t set_count = MAX_TEXTURES*2;
     vkr_generate_descriptor_layout(vkr->device, descriptors, binding_count,&vkr->descriptor_state.layout);
     vkr_generate_descriptor_pool(vkr->device, descriptors, binding_count, set_count, &vkr->descriptor_state.pool );
     vkr_generate_descriptor_sets(vkr->device, vkr->descriptor_state.pool, vkr->descriptor_state.layout, vkr->descriptor_state.sets);

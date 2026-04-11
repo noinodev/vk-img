@@ -70,6 +70,16 @@ int lua_img_channels(lua_State* L){
     return 1;
 }
 
+int lua_img_get_float(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    int x = luaL_checkinteger(L,2);
+    /*int y = luaL_checkinteger(L,3);
+    int z = luaL_checkinteger(L,4);
+    int c = luaL_checkinteger(L,5);*/
+
+    lua_pushnumber(L,image->memory[x]);
+    return 1;
+}
 
 int lua_img_create_from_image(lua_State* L){
     char* file = luaL_checkstring(L,1);
@@ -103,6 +113,25 @@ int lua_img_write_as_binary(lua_State* L){
     return 0;
 }
 
+int lua_img_write_as_binary_raw(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    char* file = luaL_checkstring(L,2);
+    char* mode = luaL_checkstring(L,3);
+
+    img_write_as_binary_raw(image,file,mode);
+    return 0;
+}
+
+int lua_img_read_from_binary_raw(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    char* file = luaL_checkstring(L,2);
+
+    //img_write_as_binary_raw(image,file,mode);
+    FILE* f = fopen(file,"r");
+    fread(image->memory,sizeof(float),img_get_size(image),f);
+    fclose(f);
+    return 0;
+}
 
 int lua_gpu_init(lua_State* L){
     img_gpu_t* gpu = lua_newuserdata(L,sizeof(img_gpu_t));
@@ -161,6 +190,13 @@ int lua_gpu_download(lua_State* L){
     return 1;
 }
 
+/*int lua_gpu_bind_buffer(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int index = luaL_checkinteger(L,2);
+
+    img_gpu_bind_buffer(gpu,index);
+    return 0;
+}*/
 
 int lua_gpu_add_stage(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
@@ -194,7 +230,9 @@ int lua_gpu_add_stage_data(lua_State* L){
             lua_rawgeti(L, 3, i + 1);
             buf[i] = lua_tonumber(L, -1);
             lua_pop(L, 1);
+            printf("%.0f ",buf[i]);
         }
+        printf("\n");
         img_gpu_add_stage_data(gpu, stage, buf, n * sizeof(float));
     }
 
@@ -222,10 +260,13 @@ static const luaL_Reg img_lib[] = {
     {"height",lua_img_height},
     {"depth",lua_img_depth},
     {"channels",lua_img_channels},
+    {"get_float",lua_img_get_float},
     {"create_from_image",lua_img_create_from_image},
     {"create_from_binary",lua_img_create_from_binary},
     {"write_as_image",lua_img_write_as_image},
     {"write_as_binary",lua_img_write_as_binary},
+    {"write_raw",lua_img_write_as_binary_raw},
+    {"read_raw",lua_img_read_from_binary_raw},
 
     {"gpu_init",            lua_gpu_init},
     {"gpu_load_program",    lua_gpu_load_program_glsl},
@@ -233,6 +274,7 @@ static const luaL_Reg img_lib[] = {
     {"gpu_allocate_buffer", lua_gpu_allocate_buffer},
     {"gpu_upload",          lua_gpu_upload},
     {"gpu_download",        lua_gpu_download},
+    //{"gpu_bind_buffer",     lua_gpu_bind_buffer},
     {"gpu_add_stage",       lua_gpu_add_stage},
     {"gpu_add_stage_data",  lua_gpu_add_stage_data},
     {"gpu_dispatch",        lua_gpu_dispatch},

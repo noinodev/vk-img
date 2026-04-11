@@ -1,0 +1,59 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 1, local_size_y = 1) in;
+
+layout(set=0, binding = 1, rgba32f) uniform image3D images[];
+layout(set=0, binding = 2) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint blocks;
+    uint weights; // svm weight buffer binding
+    uint scores;  // output scores buffer binding
+    uint overlay;
+    float bias;
+    uint window_width;
+    uint window_height;
+    uint total_window_width; // how many windows fit horizontally
+} pc;
+
+void main() {
+    uint window_idx = gl_WorkGroupID.z;
+    uint wx = window_idx % pc.total_window_width;
+    uint wy = window_idx / pc.total_window_width;
+
+    //float score = pc.bias;
+    float score = -1.4515655; // hardcoded
+    for(uint by = 0; by < pc.window_height; by++){
+        for(uint bx = 0; bx < pc.window_width; bx++){
+            ivec2 absolute_pos = ivec2(wx + bx, wy + by);
+            for(uint bin = 0; bin < 36; bin++){
+                float val = imageLoad(images[nonuniformEXT(pc.blocks)], ivec3(absolute_pos, bin)).r;
+                uint feat_idx = (bx + by * pc.window_width) * 36 + bin;
+                float w = buffers[nonuniformEXT(pc.weights)].data[feat_idx];
+                score += val * w;
+            }
+        }
+    }
+
+    buffers[nonuniformEXT(pc.scores)].data[window_idx] = score;
+
+    if(score > 0.){
+        uint cellsize = 8;
+        uint px = wx * cellsize;
+        uint py = wy * cellsize;
+        uint pw = pc.window_width * cellsize;
+        uint ph = pc.window_height * cellsize;
+
+        // draw rectangle border
+        for(uint x = px; x < px + pw; x++){
+            imageStore(images[nonuniformEXT(pc.overlay)], ivec3(x, py, 0), vec4(1,0,0,1));
+            imageStore(images[nonuniformEXT(pc.overlay)], ivec3(x, py + ph - 1, 0), vec4(1,0,0,1));
+        }
+        for(uint y = py; y < py + ph; y++){
+            imageStore(images[nonuniformEXT(pc.overlay)], ivec3(px, y, 0), vec4(1,0,0,1));
+            imageStore(images[nonuniformEXT(pc.overlay)], ivec3(px + pw - 1, y, 0), vec4(1,0,0,1));
+        }
+    }
+}

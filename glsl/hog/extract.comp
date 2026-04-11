@@ -1,0 +1,35 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 36, local_size_y = 1) in;
+
+layout(set=0, binding = 1, rgba32f) uniform image3D images[];
+layout(set=0, binding = 2) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint blocks;
+    uint vectors;
+    uint left;
+    uint top;
+    uint width;
+} pc;
+
+const float PI = 3.14159;
+
+void main() {
+
+    ivec2 block_pos_in_window = ivec2(gl_WorkGroupID.xy);
+    ivec2 absolute_pos = ivec2(pc.left, pc.top) + block_pos_in_window;
+    //ivec2 absolute_pos = block_pos_in_window;
+
+    uint local_bin_idx = gl_LocalInvocationID.x;
+
+    float val = imageLoad(images[nonuniformEXT(pc.blocks)], ivec3(absolute_pos, local_bin_idx)).r;
+
+    uint block_offset = (gl_WorkGroupID.x + (gl_WorkGroupID.y * pc.width));
+    
+    uint final_idx = (block_offset * 36) + local_bin_idx;
+
+    buffers[nonuniformEXT(pc.vectors)].data[final_idx] = val;
+}

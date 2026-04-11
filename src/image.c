@@ -104,6 +104,12 @@ void img_write_as_binary(img_t* img, const char* file){
     fclose(f);
 }
 
+void img_write_as_binary_raw(img_t* img, const char* file, const char* mode){
+    FILE* f = fopen(file,mode);
+    fwrite(img->memory, sizeof(float), img->width*img->height*img->depth*img->channels, f);
+    fclose(f);
+}
+
 // gpu thing
 
 img_gpu_t img_gpu_init(){
@@ -118,6 +124,11 @@ img_gpu_t img_gpu_init(){
     };
     VkFence fence;
     vkCreateFence(vkr->device,&info_fence,NULL,&fence);
+
+    const vkr_descriptor_info img_gpu_descriptors[] = {
+        {IMG_GPU_TYPE_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES},
+        {IMG_GPU_TYPE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}
+    };
 
     // descriptors
     vkr_generate_descriptor_state(vkr,sizeof(img_gpu_descriptors)/sizeof(img_gpu_descriptors[0]),img_gpu_descriptors);
@@ -210,6 +221,11 @@ size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size){
     return count;
 }
 
+/*void img_gpu_bind_buffer(img_gpu_t* gpu, size_t index){
+    img_gpu_buffer_t* buffer = &gpu->device.buffer[index];
+    vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,0,buffer->buffer.size);
+}*/
+
 size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
     VkBuffer hostBuffer;
     VkDeviceMemory hostMemory;
@@ -288,15 +304,28 @@ void img_gpu_dispatch(img_gpu_t* gpu){
     for(size_t i = 0; i < gpu->host.count; i++){
         if(gpu->host.host_ptr[i] == NULL){
             size_t device_idx = gpu->host.device_ptr[i];
-            img_gpu_buffer_t* buffer = &gpu->device.buffer[device_idx];
-            if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+            img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
+            //if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
 
-            vkr_texture* texture = &buffer->image;
+            //vkr_texture* texture = &buffer->image;
 
-            vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
-            texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            //vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+            //texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-            vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+            //vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+            if(device->type == IMG_GPU_TYPE_IMAGE){
+                vkr_texture* texture = &device->image;
+
+                vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+                texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+                vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+                printf("copied host buffer to device image\n");
+            }else if(device->type == IMG_GPU_TYPE_BUFFER){
+                vkr_buffer* buffer = &device->buffer;
+                vkr_copy_buffer(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,buffer->buffer,buffer->size);
+                printf("copied host buffer to device buffer\n");
+            }else printf("copying what exactly?\n");
         }
     }
 
@@ -354,9 +383,11 @@ void img_gpu_dispatch(img_gpu_t* gpu){
 
                 vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,vkr_texture_subresource_default());
                 vkr_copy_image_to_buffer(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image,texture->width, texture->height, texture->depth);
+                printf("copied device local image to host visible buffer\n");
             }else if(device->type == IMG_GPU_TYPE_BUFFER){
                 vkr_buffer* buffer = &device->buffer;
                 vkr_copy_buffer(&gpu->vkr,cmd,buffer->buffer,gpu->host.buffer[i].buffer.buffer,buffer->size);
+                printf("copied device local buffer to host visible buffer\n");
             }else printf("copying what exactly?\n");
         }
     }
