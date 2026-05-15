@@ -1,4 +1,9 @@
-build/image-lua.o: src/image-lua.c src/image.h \
+build/image-lua.o: src/image-lua.c src/image-lua.h \
+ /home/nate/dev/libs/lua-5.5.0/src/lua.h \
+ /home/nate/dev/libs/lua-5.5.0/src/luaconf.h \
+ /home/nate/dev/libs/lua-5.5.0/src/lauxlib.h \
+ /home/nate/dev/libs/lua-5.5.0/src/lua.h \
+ /home/nate/dev/libs/lua-5.5.0/src/lualib.h src/image.h \
  /home/nate/dev/libs/stb/stb_image.h \
  /home/nate/dev/libs/stb/stb_image_write.h \
  /home/nate/dev/libs/vulkan/x86_64/include/shaderc/shaderc.h \
@@ -91,12 +96,13 @@ build/image-lua.o: src/image-lua.c src/image.h \
  /home/nate/dev/libs/cglm/include/cglm/bezier.h \
  /home/nate/dev/libs/cglm/include/cglm/ray.h \
  /home/nate/dev/libs/cglm/include/cglm/affine2d.h \
- /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h \
- /home/nate/dev/libs/lua-5.5.0/src/lua.h \
- /home/nate/dev/libs/lua-5.5.0/src/luaconf.h \
- /home/nate/dev/libs/lua-5.5.0/src/lauxlib.h \
- /home/nate/dev/libs/lua-5.5.0/src/lua.h \
- /home/nate/dev/libs/lua-5.5.0/src/lualib.h
+ /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h
+src/image-lua.h:
+/home/nate/dev/libs/lua-5.5.0/src/lua.h:
+/home/nate/dev/libs/lua-5.5.0/src/luaconf.h:
+/home/nate/dev/libs/lua-5.5.0/src/lauxlib.h:
+/home/nate/dev/libs/lua-5.5.0/src/lua.h:
+/home/nate/dev/libs/lua-5.5.0/src/lualib.h:
 src/image.h:
 /home/nate/dev/libs/stb/stb_image.h:
 /home/nate/dev/libs/stb/stb_image_write.h:
@@ -192,8 +198,3 @@ src/vkr.h:
 /home/nate/dev/libs/cglm/include/cglm/ray.h:
 /home/nate/dev/libs/cglm/include/cglm/affine2d.h:
 /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h:
-/home/nate/dev/libs/lua-5.5.0/src/lua.h:
-/home/nate/dev/libs/lua-5.5.0/src/luaconf.h:
-/home/nate/dev/libs/lua-5.5.0/src/lauxlib.h:
-/home/nate/dev/libs/lua-5.5.0/src/lua.h:
-/home/nate/dev/libs/lua-5.5.0/src/lualib.h:

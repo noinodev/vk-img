@@ -1,12 +1,9 @@
+#include "image-lua.h"
 #include "image.h"
 
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-
-/*int lua_img_alloc(lua_State* L){
-    img_t* 
-}*/
 
 int lua_img_create_fill(lua_State* L){
     int w = luaL_checkinteger(L,1);
@@ -133,6 +130,46 @@ int lua_img_read_from_binary_raw(lua_State* L){
     return 0;
 }
 
+int lua_img_
+
+int lua_img_create_atlas(lua_State* L){
+    char* file = luaL_checkstring(L,1);
+    size_t bytes = luaL_checkinteger(L,2);
+    int index = luaL_checkinteger(L,3);
+
+    atlas_t temp = img_create_atlas_from_binary(file,bytes,index);
+    if(temp.memory == NULL){
+        // EOF, or allocation failed, or some err
+        lua_pushnil(L);
+    }else{
+        atlas_t* atlas = lua_newuserdata(L,sizeof(atlas_t));
+        *atlas = temp;
+    }
+
+    return 1;
+}
+
+int lua_img_destroy_atlas(lua_State* L){
+    atlas_t* atlas = lua_touserdata(L,1);
+    img_destroy_atlas(atlas);
+    return 0;
+}
+
+int lua_img_atlas_size(lua_State* L){
+    atlas_t* atlas = lua_touserdata(L,1);
+    lua_pushinteger(L,atlas->count);
+    return 1;
+}
+
+int lua_img_create_from_atlas(lua_State* L){
+    atlas_t* atlas = lua_touserdata(L,1);
+    int index = luaL_checkinteger(L,2);
+
+    img_t* img = lua_newuserdata(L,sizeof(img_t));
+    *img = img_create_from_atlas(atlas,index);
+    return 1;
+}
+
 int lua_gpu_init(lua_State* L){
     img_gpu_t* gpu = lua_newuserdata(L,sizeof(img_gpu_t));
     *gpu = img_gpu_init();
@@ -181,6 +218,14 @@ int lua_gpu_upload(lua_State* L){
     return 1;
 }
 
+int lua_gpu_map_host(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int index = luaL_checkinteger(L,2);
+    img_t* image = lua_touserdata(L,3);
+
+    img_gpu_map_host_buffer(gpu, index,image->memory);
+}
+
 int lua_gpu_download(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
     int input = luaL_checkinteger(L,2);
@@ -188,6 +233,14 @@ int lua_gpu_download(lua_State* L){
 
     lua_pushinteger(L,img_gpu_download(gpu,input,image->memory,img_get_size(image)));
     return 1;
+}
+
+int lua_gpu_map_device(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int index = luaL_checkinteger(L,2);
+    img_t* image = lua_touserdata(L,3);
+
+    img_gpu_map_device_buffer(gpu, index,image->memory);
 }
 
 /*int lua_gpu_bind_buffer(lua_State* L){
@@ -267,14 +320,19 @@ static const luaL_Reg img_lib[] = {
     {"write_as_binary",lua_img_write_as_binary},
     {"write_raw",lua_img_write_as_binary_raw},
     {"read_raw",lua_img_read_from_binary_raw},
+    {"create_atlas",lua_img_create_atlas},
+    {"destroy_atlas",lua_img_destroy_atlas},
+    {"create_from_atlas",lua_img_create_from_atlas},
+    {"atlas_size",lua_img_atlas_size},
 
     {"gpu_init",            lua_gpu_init},
     {"gpu_load_program",    lua_gpu_load_program_glsl},
     {"gpu_allocate_image",  lua_gpu_allocate_image},
     {"gpu_allocate_buffer", lua_gpu_allocate_buffer},
     {"gpu_upload",          lua_gpu_upload},
+    {"gpu_map_host",        lua_gpu_map_host},
     {"gpu_download",        lua_gpu_download},
-    //{"gpu_bind_buffer",     lua_gpu_bind_buffer},
+    {"gpu_map_device",      lua_gpu_map_device},
     {"gpu_add_stage",       lua_gpu_add_stage},
     {"gpu_add_stage_data",  lua_gpu_add_stage_data},
     {"gpu_dispatch",        lua_gpu_dispatch},

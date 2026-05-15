@@ -1,4 +1,7 @@
 #include "image.h"
+#include "vulkan/vulkan_core.h"
+#include <endian.h>
+#include <stdio.h>
 
 void img_alloc(img_t* img){
     assert(img);
@@ -108,6 +111,75 @@ void img_write_as_binary_raw(img_t* img, const char* file, const char* mode){
     FILE* f = fopen(file,mode);
     fwrite(img->memory, sizeof(float), img->width*img->height*img->depth*img->channels, f);
     fclose(f);
+}
+
+atlas_t img_create_atlas_from_binary(const char* file, size_t bytes, size_t block){
+    FILE* f = fopen(file,"rb");
+    uint32_t headers[ATLAS_SERIAL_HEADER_SIZE] = {0};
+    fread(headers,sizeof(uint32_t),ATLAS_SERIAL_HEADER_SIZE,f);
+
+    uint32_t label_stride = headers[ATLAS_SERIAL_STRIDE_META];
+    uint32_t image_stride = headers[ATLAS_SERIAL_STRIDE_IMAGE];
+    uint32_t total_stride = label_stride+image_stride;
+
+    fseek(f,0,SEEK_END);
+    long fsize = ftell(f);
+
+    size_t elements_in_block = bytes / total_stride; // total number of blocks that fit in requested allocation
+    size_t block_memory_size = elements_in_block * total_stride;
+
+    size_t offset = ATLAS_SERIAL_HEADER_SIZE*sizeof(uint32_t)+block_memory_size*block;
+
+    if(offset >= fsize){
+        return (atlas_t){0};
+    }else{
+        if(offset+block_memory_size >= fsize){
+            size_t min_bytes = offset+block_memory_size-fsize;
+            elements_in_block = min_bytes / total_stride;
+            block_memory_size = elements_in_block * total_stride;
+        }
+
+        uint8_t* memory = calloc(block_memory_size,1);
+
+        fseek(f,offset,SEEK_SET);
+        fread(memory,1,block_memory_size,f);
+
+        atlas_t atlas = {
+            .memory = memory,
+
+            .count = elements_in_block,
+            .label_stride = label_stride,
+            .image_stride = image_stride,
+            .total_stride = total_stride,
+
+            .width = headers[ATLAS_SERIAL_IMAGE_WIDTH],
+            .height = headers[ATLAS_SERIAL_IMAGE_HEIGHT],
+            .depth = headers[ATLAS_SERIAL_IMAGE_DEPTH],
+            .channels = headers[ATLAS_SERIAL_IMAGE_CHANNELS]
+        };
+
+        return atlas;
+    }
+}
+
+void img_destroy_atlas(atlas_t* atlas){
+    if(atlas->memory) free(atlas->memory);
+    *atlas = (atlas_t){0};
+}
+
+img_t img_create_from_atlas(atlas_t* atlas, uint32_t index){
+    img_t out = {0};
+    out.width = atlas->width;
+    out.height = atlas->height;
+    out.depth = atlas->depth;
+    out.channels = atlas->channels;
+
+    out.memory = atlas->memory+atlas->total_stride*index+atlas->label_stride;
+    return out;
+}
+
+uint32_t img_peek_atlas(atlas_t* atlas, uint32_t index, uint32_t label){
+    return *(uint32_t*)(((uint8_t*)atlas->memory)+atlas->total_stride*index+label);
 }
 
 // gpu thing
@@ -253,6 +325,17 @@ size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
     return count;
 }
 
+void img_gpu_map_host_buffer(img_gpu_t* gpu, size_t index, void* src){
+    img_gpu_buffer_t* staging = &gpu->host.buffer[index]; 
+    size_t size = staging->buffer.size;
+    VkDeviceMemory hostMemory = staging->buffer.memory;
+
+    void* data;
+    vkMapMemory(gpu->vkr.device, hostMemory, 0, size, 0, &data);
+        memcpy(data, src, size);
+    vkUnmapMemory(gpu->vkr.device, hostMemory);
+}
+
 size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size){
     VkBuffer hostBuffer;
     VkDeviceMemory hostMemory;
@@ -273,6 +356,10 @@ size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size){
     };
 
     return count;
+}
+
+void img_gpu_map_device_buffer(img_gpu_t* gpu, size_t index, void* dest){
+    gpu->host.host_ptr[index] = dest;
 }
 
 size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t width, uint32_t height, uint32_t depth){

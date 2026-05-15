@@ -17,6 +17,27 @@ typedef struct {
     uint32_t width, height, depth, channels; // fuckin 24 bytes
 } img_t;
 
+enum {
+    ATLAS_SERIAL_MAGIC,
+    ATLAS_SERIAL_COUNT,
+    ATLAS_SERIAL_STRIDE_META,
+
+    ATLAS_SERIAL_STRIDE_IMAGE,
+
+    ATLAS_SERIAL_IMAGE_WIDTH,
+    ATLAS_SERIAL_IMAGE_HEIGHT,
+    ATLAS_SERIAL_IMAGE_DEPTH,
+    ATLAS_SERIAL_IMAGE_CHANNELS,
+
+    ATLAS_SERIAL_HEADER_SIZE = 16
+};
+
+typedef struct {
+    void* memory; // atlas memory
+    uint32_t count,label_stride,image_stride,total_stride;
+    uint32_t width, height, depth, channels;
+} atlas_t;
+
 void img_alloc(img_t* img);
 img_t img_create_fill(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels, float* fill);
 img_t img_create_zero(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels);
@@ -29,6 +50,9 @@ void img_write_as_image(img_t* img, const char* file);
 img_t img_create_from_binary(const char* file);
 void img_write_as_binary(img_t* img, const char* file);
 void img_write_as_binary_raw(img_t* img, const char* file, const char* mode);
+atlas_t img_create_atlas_from_binary(const char* file, size_t bytes, size_t block);
+void img_destroy_atlas(atlas_t* atlas);
+img_t img_create_from_atlas(atlas_t* atlas, uint32_t index);
 
 // gpu
 
@@ -98,7 +122,9 @@ size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, 
 size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size);
 //void img_gpu_bind_buffer(img_gpu_t* gpu, size_t index);
 size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size);
+void img_gpu_map_host_buffer(img_gpu_t* gpu, size_t index, void* src); // reupload
 size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size);
+void img_gpu_map_device_buffer(img_gpu_t* gpu, size_t index, void* dest); // redownload
 void img_gpu_free(img_gpu_t* gpu, img_gpu_buffer_t* buffer);
 
 size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t width, uint32_t height, uint32_t depth);
