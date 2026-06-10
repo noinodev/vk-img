@@ -1,0 +1,32 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+// grad_bias[k] = sum_{x,y} next_grad_act[k, y, x]
+
+layout(push_constant) uniform PushConstants {
+    uint next_grad_act; // image3D index: upstream gradient [out_ch, out_h, out_w]
+    uint grad_bias; // buffer index:  bias gradient [out_ch]
+    uint out_w;
+    uint out_h;
+    uint out_ch;
+} pc;
+
+void main(){
+    uint k = gl_GlobalInvocationID.x;
+    if(k >= pc.out_ch) return;
+
+    float sum = 0.0;
+    for(uint y = 0; y < pc.out_h; y++){
+        for(uint x = 0; x < pc.out_w; x++){
+            sum += imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], ivec3(x, y, k)).r;
+        }
+    }
+
+    buffers[nonuniformEXT(pc.grad_bias)].data[k] = sum;
+}

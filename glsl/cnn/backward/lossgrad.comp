@@ -1,0 +1,24 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint act;
+    uint grad_act;
+    uint label;
+    uint dim;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if(i >= pc.dim) return;
+
+    float val = buffers[nonuniformEXT(pc.act)].data[i];
+
+    if(i == pc.label) val -= 1.;
+    buffers[nonuniformEXT(pc.grad_act)].data[i] = val;
+}

@@ -1,0 +1,46 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint buf_w;
+    uint buf_g;
+    uint buf_m;
+    uint buf_v;
+    uint dim;
+
+    float lr;
+    float eps;
+
+    float bias1; // 1. - 0.9^t
+    float bias2; // t. - 0.999^t where t is number of optimizer steps
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.dim) return;
+
+    float w = buffers[nonuniformEXT(pc.buf_w)].data[i];
+    float g = buffers[nonuniformEXT(pc.buf_g)].data[i];
+    float m = buffers[nonuniformEXT(pc.buf_m)].data[i];
+    float v = buffers[nonuniformEXT(pc.buf_v)].data[i];
+
+    m = 0.9 * m + 0.1 * g;
+    v = 0.999 * v + 0.001 * (g * g);
+
+    buffers[nonuniformEXT(pc.buf_m)].data[i] = m;
+    buffers[nonuniformEXT(pc.buf_v)].data[i] = v;
+
+    float m_hat = m / pc.bias1;
+    float v_hat = v / pc.bias2;
+
+    float denom = sqrt(v_hat + pc.eps);
+
+    w = w - pc.lr * (m_hat / denom);
+
+    buffers[nonuniformEXT(pc.buf_w)].data[i] = w;
+}

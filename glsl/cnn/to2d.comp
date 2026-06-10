@@ -1,0 +1,34 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 1, rgba8) uniform image2D images_in[];
+layout(set=0, binding = 2, r32f) uniform image3D images_out[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint image_input;
+    uint image_output;
+
+    uint image_width;
+    uint image_height;
+} pc;
+
+void main() {
+    ivec3 texel = ivec3(gl_GlobalInvocationID.xyz);
+    ivec2 size = ivec2(pc.image_width,pc.image_height);
+    if(texel.x >= size.x || texel.y >= size.y) return;
+
+    vec3 col = vec3(0.);
+    col.x = imageLoad(images_out[nonuniformEXT(pc.image_input)],ivec3(texel.xy,0)).r;
+    col.y = imageLoad(images_out[nonuniformEXT(pc.image_input)],ivec3(texel.xy,1)).r;
+    col.z = imageLoad(images_out[nonuniformEXT(pc.image_input)],ivec3(texel.xy,2)).r;
+
+    imageStore(
+        images_in[nonuniformEXT(pc.image_output)],
+        texel.xy,
+        vec4(col,1.)
+    );
+}

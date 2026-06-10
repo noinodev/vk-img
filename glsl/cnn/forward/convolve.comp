@@ -1,0 +1,80 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint input_tensor;
+    uint output_tensor;
+    uint weight_buf;
+    uint bias_buf;
+    uint in_w;
+    uint in_h;
+    uint ch_in;
+    uint ch_out;
+    uint relu;
+} pc;
+
+void main() {
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    uint oc_base = gl_GlobalInvocationID.z * 4;
+
+    if (x >= pc.in_w || y >= pc.in_h) return;
+
+    if (oc_base >= pc.ch_out) return;
+
+    float acc0 = buffers[pc.bias_buf].data[oc_base + 0];
+    float acc1 = buffers[pc.bias_buf].data[oc_base + 1];
+    float acc2 = buffers[pc.bias_buf].data[oc_base + 2];
+    float acc3 = buffers[pc.bias_buf].data[oc_base + 3];
+
+    for (uint in_ch = 0; in_ch < pc.ch_in; in_ch++) {
+
+        for (int ky = 0; ky < 3; ky++) {
+            int sy = int(y) + ky - 1;
+            if (sy < 0 || sy >= int(pc.in_h)) continue;
+
+            for (int kx = 0; kx < 3; kx++) {
+                int sx = int(x) + kx - 1;
+                if (sx < 0 || sx >= int(pc.in_w)) continue;
+
+                float inp = imageLoad(
+                    tensors[nonuniformEXT(pc.input_tensor)],
+                    ivec3(sx, sy, in_ch)
+                ).r;
+
+                uint base = in_ch * 9 + uint(ky) * 3 + uint(kx);
+
+                // unrolled loop is like 5x speedup
+
+                uint w0 = (oc_base + 0) * (pc.ch_in * 9) + base;
+                uint w1 = (oc_base + 1) * (pc.ch_in * 9) + base;
+                uint w2 = (oc_base + 2) * (pc.ch_in * 9) + base;
+                uint w3 = (oc_base + 3) * (pc.ch_in * 9) + base;
+
+                acc0 += inp * buffers[nonuniformEXT(pc.weight_buf)].data[w0];
+                acc1 += inp * buffers[nonuniformEXT(pc.weight_buf)].data[w1];
+                acc2 += inp * buffers[nonuniformEXT(pc.weight_buf)].data[w2];
+                acc3 += inp * buffers[nonuniformEXT(pc.weight_buf)].data[w3];
+            }
+        }
+    }
+
+    if (pc.relu != 0) {
+        acc0 = max(acc0, 0.0);
+        acc1 = max(acc1, 0.0);
+        acc2 = max(acc2, 0.0);
+        acc3 = max(acc3, 0.0);
+    }
+
+    imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 0), vec4(acc0));
+    imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 1), vec4(acc1));
+    imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 2), vec4(acc2));
+    imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 3), vec4(acc3));
+}

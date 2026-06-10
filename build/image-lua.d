@@ -25,6 +25,9 @@ build/image-lua.o: src/image-lua.c src/image-lua.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_decode.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_encode.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std_decode.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h \
  /home/nate/dev/libs/cglm/include/cglm/cglm.h \
  /home/nate/dev/libs/cglm/include/cglm/common.h \
  /home/nate/dev/libs/cglm/include/cglm/types.h \
@@ -126,6 +129,9 @@ src/vkr.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_decode.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_encode.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std_decode.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h:
 /home/nate/dev/libs/cglm/include/cglm/cglm.h:
 /home/nate/dev/libs/cglm/include/cglm/common.h:
 /home/nate/dev/libs/cglm/include/cglm/types.h:

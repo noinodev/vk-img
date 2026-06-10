@@ -20,6 +20,9 @@ build/image.o: src/image.c src/image.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_decode.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std.h \
  /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_encode.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std_decode.h \
+ /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h \
  /home/nate/dev/libs/cglm/include/cglm/cglm.h \
  /home/nate/dev/libs/cglm/include/cglm/common.h \
  /home/nate/dev/libs/cglm/include/cglm/types.h \
@@ -91,7 +94,8 @@ build/image.o: src/image.c src/image.h \
  /home/nate/dev/libs/cglm/include/cglm/bezier.h \
  /home/nate/dev/libs/cglm/include/cglm/ray.h \
  /home/nate/dev/libs/cglm/include/cglm/affine2d.h \
- /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h
+ /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h \
+ src/renderdoc_app.h
 src/image.h:
 /home/nate/dev/libs/stb/stb_image.h:
 /home/nate/dev/libs/stb/stb_image_write.h:
@@ -115,6 +119,9 @@ src/vkr.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_decode.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std.h:
 /home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_av1std_encode.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std_decode.h:
+/home/nate/dev/libs/vulkan/x86_64/include/vk_video/vulkan_video_codec_vp9std.h:
 /home/nate/dev/libs/cglm/include/cglm/cglm.h:
 /home/nate/dev/libs/cglm/include/cglm/common.h:
 /home/nate/dev/libs/cglm/include/cglm/types.h:
@@ -187,3 +194,4 @@ src/vkr.h:
 /home/nate/dev/libs/cglm/include/cglm/ray.h:
 /home/nate/dev/libs/cglm/include/cglm/affine2d.h:
 /home/nate/dev/libs/cglm/include/cglm/affine2d-post.h:
+src/renderdoc_app.h:

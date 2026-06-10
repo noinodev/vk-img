@@ -28,8 +28,6 @@ VkResult vkr_create_debug(VkInstance instance, const VkDebugUtilsMessengerCreate
 }
 
 int vkr_init(vkr_state* vkr){
-
-
 	// VK INIT
 
 	VkResult vkres;
@@ -292,115 +290,12 @@ int vkr_destroy(vkr_state *vkr) {
     return 1;
 }
 
-int vkr_generate_shader_family(vkr_state* vkr, vkr_shader_bundle* bundle, vkr_shader_family* family){
-	uint32_t count = 0;
-	family->stage_mask = bundle->stage_mask;
-	for(uint32_t i = 0; i < VKR_SHADER_COUNT; i++){
-		family->stage_shader[i] = (vkr_shader){ 0 };
-		if(!(bundle->stage_mask & (1 << i))) continue;
-
-		size_t size;
-		uint32_t* source = vkr_shader_load(bundle->path[count++],&size);
-
-		family->stage_shader[i].module = vkr_shader_module_create(vkr->device,source,size);
-		family->stage_shader[i].stage = vkr_stage_conversion[i];
-
-		free(source);
-	}
-	return 1;
-}
-
-/*int vkr_generate_shader_state(vkr_state* vkr){
-	vkr_shader_bundle bundle = { 0 };
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/default.vert.spv",
-			"spv/default.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_FORWARD]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/deferred.vert.spv",
-			"spv/deferred.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_GBUFFER]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/composite.vert.spv",
-			"spv/composite.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_COMPOSITE]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/reflection.vert.spv",
-			"spv/reflection.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_REFLECTION]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/shadow.vert.spv",
-			"spv/shadow.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_SHADOW]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_VS|VKR_STAGEF_FS,
-		.path={
-			"spv/composite.vert.spv",
-			"spv/radiance.frag.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_RADIANCE]);
-
-	bundle = (vkr_shader_bundle){
-		.stage_mask=VKR_STAGEF_COMP,
-		.path={
-			"spv/minmax.comp.spv"
-		},
-	};
-	vkr_generate_shader_family(vkr,&bundle,&vkr->shader_state.family[VKR_SHADER_FAMILY_MINMAX]);
-
-	
-	return 1;
-}*/
-
-int vkr_fill_shader_stages(vkr_shader_family* family, uint32_t stage_mask, VkPipelineShaderStageCreateInfo* out){
-    uint32_t idx = 0;
-    for(uint32_t i = 0; i < VKR_STAGE_COUNT; i++){
-        if(!(stage_mask & (1 << i))) continue;
-
-        out[idx].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        out[idx].stage  = family->stage_shader[i].stage;
-        out[idx].module = family->stage_shader[i].module;
-        out[idx].pName  = "main";
-        idx++;
-    }
-
-	return 1;
-}
-
 VkPipeline vkr_generate_pipeline_compute(vkr_state* vkr, VkShaderModule shader){
 	VkPipelineShaderStageCreateInfo stage = {0};
 	stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	stage.module = shader;
 	stage.pName = "main";
-	//vkr_fill_shader_stages(shaders, shaders->stage_mask & VKR_STAGEF_COMP, &stage);
 
     VkComputePipelineCreateInfo info_pipeline = {
     	.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -447,26 +342,6 @@ int vkr_generate_pipeline_layout(vkr_state* vkr){
 	return 1;
 }
 
-int vkr_bind_view(vkr_state* vkr, uint32_t binding, VkImageView view, uint32_t index, VkSampler sampler){
-	VkDescriptorImageInfo info = {
-		.sampler = sampler,           // one sampler for all textures is fine
-		.imageView = view,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	};
-
-	VkWriteDescriptorSet write = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = vkr->descriptor_state.sets[0], // your one bindless set
-		.dstBinding = binding,                          // the bindless array binding
-		.dstArrayElement = index,         // the slot in the array
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.pImageInfo = &info
-	};
-
-	vkUpdateDescriptorSets(vkr->device, 1, &write, 0, NULL);
-}
-
 int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, uint32_t index){
 	VkDescriptorImageInfo info = {
 		.imageView = view,
@@ -475,9 +350,9 @@ int vkr_bind_view_compute(vkr_state* vkr, uint32_t binding, VkImageView view, ui
 
 	VkWriteDescriptorSet write = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = vkr->descriptor_state.sets[0], // your one bindless set
-		.dstBinding = binding,                          // the bindless array binding
-		.dstArrayElement = index,         // the slot in the array
+		.dstSet = vkr->descriptor_state.sets[0],
+		.dstBinding = binding,
+		.dstArrayElement = index,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 		.pImageInfo = &info
@@ -494,8 +369,8 @@ int vkr_bind_buffer_compute(vkr_state* vkr, uint32_t binding, VkBuffer buffer, u
 
 	VkWriteDescriptorSet write = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = vkr->descriptor_state.sets[0], // your one bindless set
-		.dstBinding = binding,                          // the bindless array binding
+		.dstSet = vkr->descriptor_state.sets[0],
+		.dstBinding = binding,
 		.dstArrayElement = index,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,

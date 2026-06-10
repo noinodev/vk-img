@@ -12,17 +12,28 @@
 
 // data
 
+enum{
+    IMG_TYPE_BYTE,
+    IMG_TYPE_SHORT,
+    IMG_TYPE_INT,
+    IMG_TYPE_FLOAT,
+    IMG_TYPE_DOUBLE
+};
+
 typedef struct {
-    float* memory;
-    uint32_t width, height, depth, channels; // fuckin 24 bytes
+    unsigned char* memory;
+    uint32_t width, height, depth; // fuckin 24 bytes
+    uint8_t channels;
+    uint8_t type;
+    uint8_t meta[2];
 } img_t;
 
 enum {
-    ATLAS_SERIAL_MAGIC,
     ATLAS_SERIAL_COUNT,
-    ATLAS_SERIAL_STRIDE_META,
 
+    ATLAS_SERIAL_STRIDE_META,
     ATLAS_SERIAL_STRIDE_IMAGE,
+    ATLAS_SERIAL_STRIDE_TOTAL,
 
     ATLAS_SERIAL_IMAGE_WIDTH,
     ATLAS_SERIAL_IMAGE_HEIGHT,
@@ -33,26 +44,35 @@ enum {
 };
 
 typedef struct {
-    void* memory; // atlas memory
+    unsigned char* memory; // atlas memory
+    unsigned char* labels;
+
+    size_t start;
+    size_t size;
+
     uint32_t count,label_stride,image_stride,total_stride;
     uint32_t width, height, depth, channels;
 } atlas_t;
 
 void img_alloc(img_t* img);
-img_t img_create_fill(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels, float* fill);
-img_t img_create_zero(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels);
+img_t img_create(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels, uint32_t type);
+void img_fill(img_t* img, double r, double g, double b, double a);
 void img_destroy(img_t* img);
 int img_validate(img_t* img);
 size_t img_get_size(img_t* img);
+size_t img_get_stride(img_t* img);
+void img_remap(img_t* src, img_t* dst);
 
 img_t img_create_from_image(const char* file, uint32_t channels);
 void img_write_as_image(img_t* img, const char* file);
 img_t img_create_from_binary(const char* file);
+img_t img_create_from_binary_raw(const char* file);
 void img_write_as_binary(img_t* img, const char* file);
 void img_write_as_binary_raw(img_t* img, const char* file, const char* mode);
 atlas_t img_create_atlas_from_binary(const char* file, size_t bytes, size_t block);
 void img_destroy_atlas(atlas_t* atlas);
 img_t img_create_from_atlas(atlas_t* atlas, uint32_t index);
+void img_copy_atlas_batch(atlas_t* atlas, img_t* image, uint32_t index, uint32_t count);
 
 // gpu
 
@@ -94,6 +114,8 @@ typedef struct {
 typedef struct {
     vkr_state vkr;
     VkFence fence;
+    VkCommandBuffer cmd;
+    uint32_t cmd_sealed;
 
     struct {
         img_gpu_buffer_t buffer[IMG_GPU_MAX_BUFFERS];
@@ -105,7 +127,7 @@ typedef struct {
         size_t device_ptr[IMG_GPU_MAX_BUFFERS];
 
         void* host_ptr[IMG_GPU_MAX_BUFFERS];
-        //size_t copy_size[IMG_GPU_MAX_BUFFERS];
+        void* mapped_ptr[IMG_GPU_MAX_BUFFERS];
 
         size_t count;
     } host;
@@ -121,64 +143,18 @@ img_gpu_program_t img_gpu_load_program_glsl(img_gpu_t* gpu, const char* shader_f
 size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, uint32_t height, uint32_t depth, uint32_t channels);
 size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size);
 //void img_gpu_bind_buffer(img_gpu_t* gpu, size_t index);
+size_t img_gpu_upload_now(img_gpu_t* gpu, size_t dest, void* src, size_t size);
 size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size);
 void img_gpu_map_host_buffer(img_gpu_t* gpu, size_t index, void* src); // reupload
+size_t img_gpu_download_now(img_gpu_t* gpu, size_t src, void* dest, size_t size);
 size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size);
 void img_gpu_map_device_buffer(img_gpu_t* gpu, size_t index, void* dest); // redownload
 void img_gpu_free(img_gpu_t* gpu, img_gpu_buffer_t* buffer);
 
 size_t img_gpu_add_stage(img_gpu_t* gpu, img_gpu_program_t* program, uint32_t width, uint32_t height, uint32_t depth);
 void img_gpu_add_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size);
-void img_gpu_dispatch(img_gpu_t* gpu);
+void img_gpu_set_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size, size_t offset);
+float img_gpu_dispatch(img_gpu_t* gpu);
 void img_gpu_reset(img_gpu_t* gpu);
-
-// programs
-
-typedef struct {
-    char* name;
-    img_t (*program)(img_t input, int argc, char** argv);
-    uint32_t channel_override;
-} img_program_t;
-
-img_t img_program_greyscale(img_t input, int argc, char** argv);
-img_t img_program_brightness(img_t input, int argc, char** argv);
-img_t img_program_clamp(img_t input, int argc, char** argv);
-img_t img_program_window(img_t input, int argc, char** argv);
-img_t img_program_histogram(img_t input, int argc, char** argv);
-img_t img_program_histogram_rgb(img_t input, int argc, char** argv);
-img_t img_program_otsu(img_t input, int argc, char** argv);
-img_t img_program_convolve(img_t input, int argc, char** argv);
-img_t img_program_minmax(img_t input, int argc, char** argv);
-img_t img_program_compound(img_t input, int argc, char** argv);
-
-img_t img_program_gpu_greyscale(img_t input, int argc, char** argv);
-img_t img_program_gpu_brightness(img_t input, int argc, char** argv);
-img_t img_program_gpu_downscale(img_t input, int argc, char** argv);
-img_t img_program_gpu_convolve(img_t input, int argc, char** argv);
-img_t img_program_gpu_minmax(img_t input, int argc, char** argv);
-img_t img_program_gpu_compound(img_t input, int argc, char** argv);
-img_t img_program_gpu_hog(img_t input, int argc, char** argv);
-
-
-static const img_program_t img_program_table[] = {
-    {"greyscale", img_program_greyscale,0},
-    {"brightness", img_program_brightness,0},
-    {"clamp", img_program_clamp,0},
-    {"window", img_program_window,0},
-    {"histogram", img_program_histogram,0},
-    {"histogram_rgb", img_program_histogram_rgb,0},
-    {"otsu", img_program_otsu,0},
-    {"convolve",img_program_convolve,0},
-    {"minmax",img_program_minmax,0},
-    {"compound",img_program_compound,0},
-
-    {"greyscale_gpu",img_program_gpu_greyscale,4},
-    {"brightness_gpu",img_program_gpu_brightness,4},
-    {"downscale",img_program_gpu_downscale,4},
-    {"convolve_gpu",img_program_gpu_convolve,4},
-    {"minmax_gpu",img_program_gpu_minmax,4},
-    {"compound_gpu",img_program_gpu_compound,4},
-    {"sobel",img_program_gpu_hog,4}
-};
 
 #endif // image_h

@@ -5,17 +5,15 @@
 #include "stb_image.h"
 #include "vulkan/vulkan_core.h"
 
-uint32_t vkr_find_memtype(VkPhysicalDevice phys_dev, uint32_t typeFilter, VkMemoryPropertyFlags props){
+uint32_t vkr_find_memtype(VkPhysicalDevice phys_dev, uint32_t type_filter, VkMemoryPropertyFlags props){
     VkPhysicalDeviceMemoryProperties memProps;
     vkGetPhysicalDeviceMemoryProperties(phys_dev, &memProps);
 
-    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && (memProps.memoryTypes[i].propertyFlags & props) == props)
-            return i;
+    for(uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+        if((type_filter & (1 << i)) && (memProps.memoryTypes[i].propertyFlags & props) == props) return i;
     }
 
-    // Handle failure (production code should use VK_ERROR_EXTENSION_NOT_PRESENT, etc.)
-    assert(0 && "Failed to find suitable memory type!");
+    assert(0 && "Failed to find suitable memory type");
     return 0;
 }
 
@@ -62,7 +60,7 @@ VkCommandBuffer vkr_stc_begin(VkDevice device, VkCommandPool pool) {
 
     VkCommandBufferBeginInfo beginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .flags = 0,
     };
 
     vkBeginCommandBuffer(cmd, &beginInfo);
@@ -182,6 +180,7 @@ int vkr_texture_transition_many(VkCommandBuffer cmd, uint32_t count, VkImage* im
 	VkPipelineStageFlags sourceStage;
 	VkPipelineStageFlags destinationStage;
 
+	if (oldLayout == newLayout) return 1;
 	if(oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 	    srcAccessMask = 0;
 	    dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -248,7 +247,7 @@ int vkr_texture_transition_many(VkCommandBuffer cmd, uint32_t count, VkImage* im
 		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 	}*/else{
-		printf("invalid layout transition [!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!]\n");
+		printf("invalid layout transition [!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!]\nsrc: %i dst: %i\n",oldLayout,newLayout);
 		return -1;
 	}
 

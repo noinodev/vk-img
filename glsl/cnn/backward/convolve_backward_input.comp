@@ -1,0 +1,66 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint next_grad_act; // image3D index: upstream gradient [out_ch, out_h, out_w]
+    uint grad_act; // image3D index: input gradient [in_ch,  in_h,  in_w]
+    uint weights; // buffer index:  conv weights [out_ch, in_ch, kH, kW]
+    uint act; // image3D index: forward activations for ReLU gate
+    uint in_ch;
+    uint out_ch;
+    uint in_h;
+    uint in_w;
+    uint out_h;
+    uint out_w;
+    uint kH;
+    uint kW;
+    uint pad;
+    uint relu;
+} pc;
+
+void main(){
+    uint ix = gl_GlobalInvocationID.x;
+    uint iy = gl_GlobalInvocationID.y;
+    uint c  = gl_GlobalInvocationID.z;
+    if(ix >= pc.in_w || iy >= pc.in_h || c >= pc.in_ch) return;
+
+    uint kernel_size = pc.kH * pc.kW;
+
+    float sum = 0.0;
+
+    for(uint k = 0; k < pc.out_ch; k++){
+        for(uint ky = 0; ky < pc.kH; ky++){
+            int oy = int(iy) - int(ky) + int(pc.pad);
+            if(oy < 0 || oy >= int(pc.out_h)) continue;
+
+            for(uint kx = 0; kx < pc.kW; kx++){
+                int ox = int(ix) - int(kx) + int(pc.pad);
+                if(ox < 0 || ox >= int(pc.out_w)) continue;
+
+                float g = imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], ivec3(ox, oy, k)).r;
+
+                float w = buffers[nonuniformEXT(pc.weights)].data[
+                    k * (pc.in_ch * kernel_size)
+                    + c * kernel_size
+                    + ky * pc.kW
+                    + kx];
+
+                sum += w * g;
+            }
+        }
+    }
+
+    // ReLU gate
+    if(pc.relu != 0){
+        float a = imageLoad(tensors[nonuniformEXT(pc.act)], ivec3(ix, iy, c)).r;
+        if(a <= 0.0) sum = 0.0;
+    }
+
+    imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(sum));
+}

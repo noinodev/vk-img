@@ -3,17 +3,27 @@
 #include <endian.h>
 #include <stdio.h>
 
+size_t img_get_stride(img_t* img){
+    switch(img->type){
+        case IMG_TYPE_BYTE: return sizeof(unsigned char);
+        case IMG_TYPE_SHORT: return sizeof(unsigned short);
+        case IMG_TYPE_INT: return sizeof(unsigned int);
+        case IMG_TYPE_FLOAT: return sizeof(float);
+        case IMG_TYPE_DOUBLE: return sizeof(double);
+    }
+}
+
 void img_alloc(img_t* img){
     assert(img);
     assert(img->width > 0);
     assert(img->height > 0);
     assert(img->depth > 0);
     assert(img->channels > 0);
+    
+    size_t stride = img_get_stride(img);
+    size_t size = img->width * img->height * img->depth * img->channels;
 
-    img->memory = (float*)calloc(
-        img->width * img->height * img->depth * img->channels,
-        sizeof(float)
-    );
+    img->memory = (uint8_t*)calloc(size,stride);
 
     assert(img->memory);
 }
@@ -33,30 +43,84 @@ int img_validate(img_t* img){
 }
 
 size_t img_get_size(img_t* img){
-    return img->width*img->height*img->depth*img->channels*sizeof(float);
+    return img->width*img->height*img->depth*img->channels;
 }
 
-img_t img_create_zero(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels){
+img_t img_create(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels, uint32_t type){
     img_t out = {0};
     out.width = width;
     out.height = height;
     out.depth = depth;
     out.channels = channels;
+    out.type = type;
+
+    //printf("%d %d %d %d %d \n",width,height,depth,channels,type); // prints 686,386,1,4,0 (correct)
+    //printf("%d %d %d %d %d \n",out.width,out.height,out.depth,out.channels,out.type); // prints 0,0,0,0,0
 
     img_alloc(&out);
-    printf("img_create_zero\n");
+    //printf("img_create_zero\n");
     return out;
 }
 
-img_t img_create_fill(uint32_t width, uint32_t height, uint32_t depth, uint32_t channels, float* fill){
-    img_t out = img_create_zero(width,height,depth,channels);
+void img_fill(img_t* img, double r, double g, double b, double a){
+    double cols[] = {r,g,b,a};
+    size_t stride = img_get_stride(img);
+    size_t size = img_get_size(img);
+    size_t channels = img->channels;
 
-    for(uint32_t i = 0; i < width*height*depth; i++){
-        memcpy(&out.memory[i*channels],fill,sizeof(float)*channels); // not ideal lol
-        //if(i%10==0)printf("%d ",out.memory[4*i]);
+    switch(img->type){
+        case IMG_TYPE_BYTE:{
+            for(size_t i = 0; i < size; i++){
+                ((unsigned char*)img->memory)[i] = (unsigned char)cols[i%channels];
+            }
+        } break;
+
+        case IMG_TYPE_SHORT:{
+            for(size_t i = 0; i < size; i++){
+                ((unsigned short*)img->memory)[i] = (unsigned short)cols[i%channels];
+            }
+        } break;
+
+        case IMG_TYPE_INT:{
+            for(size_t i = 0; i < size; i++){
+                ((unsigned int*)img->memory)[i] = (unsigned int)cols[i%channels];
+            }
+        } break;
+
+        case IMG_TYPE_FLOAT:{
+            for(size_t i = 0; i < size; i++){
+                ((float*)img->memory)[i] = (float)cols[i%channels];
+            }
+        } break;
+
+        case IMG_TYPE_DOUBLE:{
+            for(size_t i = 0; i < size; i++){
+                ((double*)img->memory)[i] = (double)cols[i%channels];
+            }
+        } break;
     }
-    printf("img_create_fill\n");
-    return out;
+}
+
+void img_remap(img_t* src, img_t* dst){
+    if(
+        src->width != dst->width ||
+        src->height != dst->height ||
+        src->depth != dst->depth
+    ){
+        printf("remap fail: src and dst must be same dimensions\n");
+        return;
+    }
+
+    size_t size = img_get_size(src)/src->channels;
+    size_t min_channels = dst->channels < src->channels ? dst->channels : src->channels;
+    size_t src_stride = img_get_stride(src);
+    size_t dst_stride = img_get_stride(dst);
+
+    for(size_t i = 0; i < size; i++){
+        for(size_t j = 0; j < min_channels; j++){
+            dst->memory[(i*dst->channels+j)*dst_stride] = src->memory[(i*src->channels+j)*src_stride];
+        }
+    }
 }
 
 img_t img_create_from_image(const char* file, uint32_t channels){
@@ -64,11 +128,9 @@ img_t img_create_from_image(const char* file, uint32_t channels){
     stbi_uc* pixels = stbi_load(file, &w, &h, &c, channels);
     if(channels != 0) c = channels;
 
-    img_t out = img_create_zero(w,h,1,c);
-    for(uint32_t i = 0; i < w*h*c; i++){
-        out.memory[i] = ((float)pixels[i])/255.; // NORMALIZE !
-        //if(i%10==0)printf("%f ",out.memory[i]);
-    }
+    img_t out = img_create(w,h,1,c,IMG_TYPE_BYTE);
+    size_t size = img_get_size(&out);
+    memcpy(out.memory,pixels,size);
 
     stbi_image_free(pixels);
     printf("img_create_from_image\n");
@@ -80,11 +142,12 @@ void img_write_as_image(img_t* img, const char* file){
 
     if(img->depth != 1){
         printf("stb only supports 2d image writes\n");
+        abort();
         exit(-1);
     }
     unsigned char* pixels = malloc(img->width*img->height*img->depth*img->channels*sizeof(unsigned char));
     for(uint32_t i = 0; i < img->width*img->height*img->depth*img->channels; i++){
-        pixels[i] = fmin(fmax(img->memory[i],0.),1.)*255;
+        pixels[i] = (uint8_t*)img->memory[i];
     }
 
     stbi_write_bmp(file,img->width,img->height,img->channels,pixels);
@@ -96,6 +159,26 @@ img_t img_create_from_binary(const char* file){
     img_t out;
     fread(&out,sizeof(img_t),1,f);
     fread(out.memory,sizeof(float),out.width*out.height*out.depth*out.channels,f);
+    fclose(f);
+    return out;
+}
+
+img_t img_create_from_binary_raw(const char* file){
+    FILE* f = fopen(file,"r");
+    fseek(f,0,SEEK_END);
+    size_t size = (size_t)ftell(f);
+
+    img_t out = {0};
+    out.width = size;
+    out.height = 1;
+    out.depth = 1;
+    out.channels = 1;
+    img_alloc(&out);
+
+    printf("binary_raw '%s' size: %zu\n",file,size);
+
+    fseek(f,0,SEEK_SET);
+    fread(out.memory,1,size,f);
     fclose(f);
     return out;
 }
@@ -113,39 +196,58 @@ void img_write_as_binary_raw(img_t* img, const char* file, const char* mode){
     fclose(f);
 }
 
-atlas_t img_create_atlas_from_binary(const char* file, size_t bytes, size_t block){
+atlas_t img_create_atlas_from_binary(const char* file, size_t blocks, size_t block){
     FILE* f = fopen(file,"rb");
+    if(!f) return (atlas_t){0};
+
     uint32_t headers[ATLAS_SERIAL_HEADER_SIZE] = {0};
     fread(headers,sizeof(uint32_t),ATLAS_SERIAL_HEADER_SIZE,f);
 
+    uint32_t total_count = headers[ATLAS_SERIAL_COUNT];
+
     uint32_t label_stride = headers[ATLAS_SERIAL_STRIDE_META];
     uint32_t image_stride = headers[ATLAS_SERIAL_STRIDE_IMAGE];
-    uint32_t total_stride = label_stride+image_stride;
+    uint32_t total_stride = headers[ATLAS_SERIAL_STRIDE_TOTAL];
+
+    size_t header_size = ATLAS_SERIAL_HEADER_SIZE*sizeof(uint32_t);
+    size_t labels_size = total_count * label_stride;
+    size_t image_start = header_size + labels_size;
+
+    //printf("label: %d image: %d total: %d\n",label_stride,image_stride,total_stride);
+
+
 
     fseek(f,0,SEEK_END);
-    long fsize = ftell(f);
+    size_t fsize = (size_t)ftell(f);
 
-    size_t elements_in_block = bytes / total_stride; // total number of blocks that fit in requested allocation
-    size_t block_memory_size = elements_in_block * total_stride;
+    size_t elements_in_block = blocks; // total number of blocks that fit in requested allocation
+    size_t block_memory_size = elements_in_block * image_stride;
 
-    size_t offset = ATLAS_SERIAL_HEADER_SIZE*sizeof(uint32_t)+block_memory_size*block;
+    size_t offset = image_start+block_memory_size*block;
 
     if(offset >= fsize){
+        fclose(f);
         return (atlas_t){0};
     }else{
-        if(offset+block_memory_size >= fsize){
-            size_t min_bytes = offset+block_memory_size-fsize;
-            elements_in_block = min_bytes / total_stride;
-            block_memory_size = elements_in_block * total_stride;
+        if (offset + block_memory_size > fsize) {
+            block_memory_size = fsize - offset;
+            elements_in_block = block_memory_size / image_stride;
+            block_memory_size = elements_in_block * image_stride;
         }
 
-        uint8_t* memory = calloc(block_memory_size,1);
+        uint8_t* labels = calloc(labels_size,1);
+        fseek(f,header_size,SEEK_SET);
+        fread(labels,1,labels_size,f);
 
+        uint8_t* memory = calloc(block_memory_size,1);
         fseek(f,offset,SEEK_SET);
         fread(memory,1,block_memory_size,f);
 
         atlas_t atlas = {
             .memory = memory,
+            .labels = labels,
+            .start = elements_in_block * block,
+            .size = total_count,
 
             .count = elements_in_block,
             .label_stride = label_stride,
@@ -158,6 +260,7 @@ atlas_t img_create_atlas_from_binary(const char* file, size_t bytes, size_t bloc
             .channels = headers[ATLAS_SERIAL_IMAGE_CHANNELS]
         };
 
+        fclose(f);
         return atlas;
     }
 }
@@ -173,9 +276,22 @@ img_t img_create_from_atlas(atlas_t* atlas, uint32_t index){
     out.height = atlas->height;
     out.depth = atlas->depth;
     out.channels = atlas->channels;
+    out.type = IMG_TYPE_BYTE;
 
-    out.memory = atlas->memory+atlas->total_stride*index+atlas->label_stride;
+    out.memory = ((uint8_t*)atlas->memory)+atlas->image_stride*index;
+
+    for(uint32_t i = 0; i < atlas->label_stride; i++){
+        uint32_t idx = (atlas->start+index)*atlas->label_stride + i;
+        out.meta[i] = atlas->labels[idx];
+    }
     return out;
+}
+
+void img_copy_atlas_batch(atlas_t* atlas, img_t* image, uint32_t index, uint32_t count){
+    memcpy(image->memory,((uint8_t*)atlas->memory)+atlas->image_stride*index,atlas->image_stride*count);
+    /*for(size_t i = 0; i < count; i++){
+        memcpy(image->memory+atlas->image_stride*i,((uint8_t*)atlas->memory)+atlas->image_stride*(index+i),atlas->image_stride);
+    }*/
 }
 
 uint32_t img_peek_atlas(atlas_t* atlas, uint32_t index, uint32_t label){
@@ -184,7 +300,20 @@ uint32_t img_peek_atlas(atlas_t* atlas, uint32_t index, uint32_t label){
 
 // gpu thing
 
+#include <dlfcn.h>
+#include "renderdoc_app.h"
+RENDERDOC_API_1_1_2* rdoc = NULL;
+
 img_gpu_t img_gpu_init(){
+
+	// at startup, before VkInstance creation
+	void* mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD); // linux
+	// HMODULE mod = GetModuleHandleA("renderdoc.dll"); // windows
+	if(mod) {
+		pRENDERDOC_GetAPI fn = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+		fn(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc);
+	}
+
     img_gpu_t gpu = {0};
     vkr_state* vkr = &gpu.vkr;
     int res = 0;
@@ -194,12 +323,15 @@ img_gpu_t img_gpu_init(){
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
-    VkFence fence;
-    vkCreateFence(vkr->device,&info_fence,NULL,&fence);
+    //VkFence fence;
+    vkCreateFence(vkr->device,&info_fence,NULL,&gpu.fence);
+
+    gpu.cmd = vkr->command_buffer[0];//vkr_stc_begin(gpu->vkr.device,gpu->vkr.command_pool);
 
     const vkr_descriptor_info img_gpu_descriptors[] = {
-        {IMG_GPU_TYPE_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES},
-        {IMG_GPU_TYPE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}
+        {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}, // alt image
+        {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, MAX_TEXTURES}
     };
 
     // descriptors
@@ -211,7 +343,10 @@ img_gpu_t img_gpu_init(){
 
 img_gpu_program_t img_gpu_load_program_glsl(img_gpu_t* gpu, const char* shader_file, uint32_t width, uint32_t height, uint32_t depth){
     FILE* f = fopen(shader_file,"r");
-    if(!f) exit(-1);
+    if(!f){
+        printf("failed to open shader file: %s\n",shader_file);
+        exit(-1);
+    }
 
     fseek(f,0,SEEK_END);
     long fsize = ftell(f);
@@ -261,7 +396,9 @@ size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, 
     img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
     buffer->type = IMG_GPU_TYPE_IMAGE;
 
-    VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+    if(channels == 1) format = VK_FORMAT_R32_SFLOAT;
+    if(channels == 2) format = VK_FORMAT_R8_UINT;
 
     buffer->image = vkr_create_texture(
         &gpu->vkr,width,height,depth,format, VK_IMAGE_TILING_OPTIMAL, 
@@ -269,7 +406,10 @@ size_t img_gpu_allocate_image(img_gpu_t* gpu, uint32_t binding, uint32_t width, 
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,VK_IMAGE_ASPECT_COLOR_BIT
     );
 
-    vkr_bind_view_compute(&gpu->vkr, IMG_GPU_TYPE_IMAGE, buffer->image.view, binding);
+    vkr_bind_view_compute(&gpu->vkr, 1, buffer->image.view, binding);
+    vkr_bind_view_compute(&gpu->vkr, 2, buffer->image.view, binding);
+
+    printf("allocated gpu image: w:%i h:%i d:%i c:%i\n",width,height,depth,channels);
 
     return count;
 }
@@ -279,16 +419,16 @@ size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size){
     size_t count = gpu->device.count++;
     img_gpu_buffer_t* buffer = &gpu->device.buffer[count];
     buffer->type = IMG_GPU_TYPE_BUFFER;
-    buffer->buffer.size = size;
+    buffer->buffer.size = size*sizeof(float);
 
     vkr_alloc(
-        gpu->vkr.device,gpu->vkr.physical_device, size, 
+        gpu->vkr.device,gpu->vkr.physical_device, buffer->buffer.size, 
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &buffer->buffer.buffer, &buffer->buffer.memory
     );
 
-    vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,binding,size);
+    vkr_bind_buffer_compute(&gpu->vkr,3,buffer->buffer.buffer,binding,buffer->buffer.size);
 
     return count;
 }
@@ -297,6 +437,44 @@ size_t img_gpu_allocate_buffer(img_gpu_t* gpu, uint32_t binding, size_t size){
     img_gpu_buffer_t* buffer = &gpu->device.buffer[index];
     vkr_bind_buffer_compute(&gpu->vkr,IMG_GPU_TYPE_BUFFER,buffer->buffer.buffer,0,buffer->buffer.size);
 }*/
+
+size_t img_gpu_upload_now(img_gpu_t* gpu, size_t dest, void* src, size_t size){
+    VkBuffer hostBuffer;
+    VkDeviceMemory hostMemory;
+
+    vkr_alloc(gpu->vkr.device,gpu->vkr.physical_device,size,VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &hostBuffer, &hostMemory);
+
+    void* data;
+    vkMapMemory(gpu->vkr.device, hostMemory, 0, size, 0, &data);
+        memcpy(data, src, size);
+    vkUnmapMemory(gpu->vkr.device, hostMemory);
+
+    VkCommandBuffer cmd = vkr_stc_begin(gpu->vkr.device,gpu->vkr.command_pool);
+
+    img_gpu_buffer_t* device = &gpu->device.buffer[dest];
+    if(device->type == IMG_GPU_TYPE_IMAGE){
+        vkr_texture* texture = &device->image;
+
+        vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+        texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+        vkr_copy_buffer_to_image(&gpu->vkr,cmd,hostBuffer,texture->image, texture->width, texture->height, texture->depth);
+        vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_GENERAL,vkr_texture_subresource_default());
+    }else if(device->type == IMG_GPU_TYPE_BUFFER){
+        vkr_buffer* buffer = &device->buffer;
+        vkr_copy_buffer(&gpu->vkr,cmd,hostBuffer,buffer->buffer,buffer->size);
+    }else printf("copying what exactly?\n");
+
+
+    vkr_stc_end(gpu->vkr.device,gpu->vkr.command_pool,gpu->vkr.queue[VKR_QUEUE_GRAPHICS], cmd);
+    printf("single time upload complete: %zu bytes\n",size);
+
+    vkDestroyBuffer(gpu->vkr.device,hostBuffer,NULL);
+    vkFreeMemory(gpu->vkr.device,hostMemory,NULL);
+
+    return 1;
+}
 
 size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
     VkBuffer hostBuffer;
@@ -313,6 +491,7 @@ size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
     size_t count = gpu->host.count++;
     gpu->host.device_ptr[count] = dest;
     gpu->host.host_ptr[count] = NULL;
+    gpu->host.mapped_ptr[count] = data;
     gpu->host.buffer[count] = (img_gpu_buffer_t){
         .type = IMG_GPU_TYPE_BUFFER,
         .buffer = {
@@ -328,12 +507,50 @@ size_t img_gpu_upload(img_gpu_t* gpu, size_t dest, void* src, size_t size){
 void img_gpu_map_host_buffer(img_gpu_t* gpu, size_t index, void* src){
     img_gpu_buffer_t* staging = &gpu->host.buffer[index]; 
     size_t size = staging->buffer.size;
-    VkDeviceMemory hostMemory = staging->buffer.memory;
+    //VkDeviceMemory hostMemory = staging->buffer.memory;
+
+    //void* data;
+    //vkMapMemory(gpu->vkr.device, hostMemory, 0, size, 0, &data);
+        memcpy(gpu->host.mapped_ptr[index], src, size);
+    //vkUnmapMemory(gpu->vkr.device, hostMemory);
+}
+
+size_t img_gpu_download_now(img_gpu_t* gpu, size_t src, void* dest, size_t size){
+    VkBuffer hostBuffer;
+    VkDeviceMemory hostMemory;
+
+    vkr_alloc(gpu->vkr.device,gpu->vkr.physical_device,size,VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &hostBuffer, &hostMemory);
+
+    VkCommandBuffer cmd = vkr_stc_begin(gpu->vkr.device,gpu->vkr.command_pool);
+
+    img_gpu_buffer_t* device = &gpu->device.buffer[src];
+    if(device->type == IMG_GPU_TYPE_IMAGE){
+        vkr_texture* texture = &device->image;
+
+        vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,vkr_texture_subresource_default());
+        vkr_copy_image_to_buffer(&gpu->vkr,cmd,hostBuffer,texture->image,texture->width, texture->height, texture->depth);
+        printf("copied device local image to host visible buffer\n");
+        texture->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    }else if(device->type == IMG_GPU_TYPE_BUFFER){
+        vkr_buffer* buffer = &device->buffer;
+        vkr_copy_buffer(&gpu->vkr,cmd,buffer->buffer,hostBuffer,buffer->size);
+        //printf("copied device local buffer to host visible buffer\n");
+    }else printf("copying what exactly?\n");
+
+
+    vkr_stc_end(gpu->vkr.device,gpu->vkr.command_pool,gpu->vkr.queue[VKR_QUEUE_GRAPHICS], cmd);
+    printf("single time download complete: %zu bytes\n",size);
 
     void* data;
     vkMapMemory(gpu->vkr.device, hostMemory, 0, size, 0, &data);
-        memcpy(data, src, size);
+        memcpy(dest, data, size);
     vkUnmapMemory(gpu->vkr.device, hostMemory);
+
+    vkDestroyBuffer(gpu->vkr.device,hostBuffer,NULL);
+    vkFreeMemory(gpu->vkr.device,hostMemory,NULL);
+
+    return 1;
 }
 
 size_t img_gpu_download(img_gpu_t* gpu, size_t src, void* dest, size_t size){
@@ -386,113 +603,170 @@ void img_gpu_add_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size
     gpu->stages.pass[pass].push_size += size_align;
 }
 
-void img_gpu_dispatch(img_gpu_t* gpu){
-    VkCommandBuffer cmd = vkr_stc_begin(gpu->vkr.device,gpu->vkr.command_pool);
-    for(size_t i = 0; i < gpu->host.count; i++){
-        if(gpu->host.host_ptr[i] == NULL){
-            size_t device_idx = gpu->host.device_ptr[i];
-            img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
-            //if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+void img_gpu_set_stage_data(img_gpu_t* gpu, size_t pass, void* data, size_t size, size_t offset){
+    memcpy((uint32_t*)(gpu->stages.pass[pass].push_data)+offset,(uint32_t*)data,size);
+}
 
-            //vkr_texture* texture = &buffer->image;
+int captures = 0;
 
-            //vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
-            //texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-            //vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
-            if(device->type == IMG_GPU_TYPE_IMAGE){
-                vkr_texture* texture = &device->image;
-
-                vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
-                texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-                vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
-                printf("copied host buffer to device image\n");
-            }else if(device->type == IMG_GPU_TYPE_BUFFER){
-                vkr_buffer* buffer = &device->buffer;
-                vkr_copy_buffer(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,buffer->buffer,buffer->size);
-                printf("copied host buffer to device buffer\n");
-            }else printf("copying what exactly?\n");
-        }
-    }
-
-    for(size_t i = 0; i < gpu->device.count; i++){
-        img_gpu_buffer_t* buffer = &gpu->device.buffer[i];
-        if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
-
-        vkr_texture* texture = &buffer->image;
-
-        vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_GENERAL,vkr_texture_subresource_default());
-        texture->layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
-
-    vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->vkr.pipeline_state.layout,
-        0,
-        1, &gpu->vkr.descriptor_state.sets[0],
-        0, NULL
-    );
-
-    for(size_t i = 0; i < gpu->stages.count; i++){
-        img_gpu_pass_t* pass = &gpu->stages.pass[i];
-        uint32_t width = (pass->width + (pass->program->workgroup.width-1)) / pass->program->workgroup.width;
-        uint32_t height = (pass->height + (pass->program->workgroup.height-1)) / pass->program->workgroup.height;
-        uint32_t depth = (pass->depth + (pass->program->workgroup.depth-1)) / pass->program->workgroup.depth;
-        vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pass->program->pipeline);
-        vkCmdPushConstants(cmd,gpu->vkr.pipeline_state.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,pass->push_size, pass->push_data);
-        vkCmdDispatch(cmd,width,height,depth);
-
-        VkMemoryBarrier mb = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+float img_gpu_dispatch(img_gpu_t* gpu){
+    if(gpu->cmd_sealed == 0){
+        VkCommandBufferBeginInfo beginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
         };
 
-        vkCmdPipelineBarrier(
-            cmd,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        vkBeginCommandBuffer(gpu->cmd, &beginInfo);
+        vkCmdResetQueryPool(gpu->cmd, gpu->vkr.query_pool, 0, 2);
+        vkCmdWriteTimestamp(gpu->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, gpu->vkr.query_pool, 0);
+
+        for(size_t i = 0; i < gpu->host.count; i++){
+            if(gpu->host.host_ptr[i] == NULL){
+                size_t device_idx = gpu->host.device_ptr[i];
+                img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
+                //if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+
+                //vkr_texture* texture = &buffer->image;
+
+                //vkr_texture_transition_many(cmd,1,&texture->image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+                //texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+                //vkr_copy_buffer_to_image(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+                if(device->type == IMG_GPU_TYPE_IMAGE){
+                    vkr_texture* texture = &device->image;
+
+                    vkr_texture_transition_many(gpu->cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,vkr_texture_subresource_default());
+                    texture->layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+                    vkr_copy_buffer_to_image(&gpu->vkr,gpu->cmd,gpu->host.buffer[i].buffer.buffer,texture->image, texture->width, texture->height, texture->depth);
+                    //printf("copied host buffer to device image\n");
+                }else if(device->type == IMG_GPU_TYPE_BUFFER){
+                    vkr_buffer* buffer = &device->buffer;
+                    vkr_copy_buffer(&gpu->vkr,gpu->cmd,gpu->host.buffer[i].buffer.buffer,buffer->buffer,buffer->size);
+                    //printf("copied host buffer to device buffer\n");
+                }else printf("copying what exactly?\n");
+
+                //gpu->host.device_ptr[i] = NULL;
+            }
+        }
+
+        /*for(size_t i = 0; i < gpu->device.count; i++){
+            img_gpu_buffer_t* buffer = &gpu->device.buffer[i];
+            if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
+
+            vkr_texture* texture = &buffer->image;
+
+            vkr_texture_transition_many(gpu->cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_GENERAL,vkr_texture_subresource_default());
+            texture->layout = VK_IMAGE_LAYOUT_GENERAL;
+        }*/
+
+        vkCmdBindDescriptorSets(
+            gpu->cmd,
+            VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->vkr.pipeline_state.layout,
             0,
-            1, &mb,
-            0, NULL,
+            1, &gpu->vkr.descriptor_state.sets[0],
             0, NULL
         );
-    }
 
-    for(size_t i = 0; i < gpu->host.count; i++){
-        if(gpu->host.host_ptr[i] != NULL){
-            size_t device_idx = gpu->host.device_ptr[i];
-            img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
-            if(device->type == IMG_GPU_TYPE_IMAGE){
-                vkr_texture* texture = &device->image;
+        for(size_t i = 0; i < gpu->stages.count; i++){
+            img_gpu_pass_t* pass = &gpu->stages.pass[i];
+            uint32_t width = (pass->width + (pass->program->workgroup.width-1)) / pass->program->workgroup.width;
+            uint32_t height = (pass->height + (pass->program->workgroup.height-1)) / pass->program->workgroup.height;
+            uint32_t depth = (pass->depth + (pass->program->workgroup.depth-1)) / pass->program->workgroup.depth;
+            vkCmdBindPipeline(gpu->cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pass->program->pipeline);
+            vkCmdPushConstants(gpu->cmd,gpu->vkr.pipeline_state.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,pass->push_size, pass->push_data);
+            vkCmdDispatch(gpu->cmd,width,height,depth);
 
-                vkr_texture_transition_many(cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,vkr_texture_subresource_default());
-                vkr_copy_image_to_buffer(&gpu->vkr,cmd,gpu->host.buffer[i].buffer.buffer,texture->image,texture->width, texture->height, texture->depth);
-                printf("copied device local image to host visible buffer\n");
-            }else if(device->type == IMG_GPU_TYPE_BUFFER){
-                vkr_buffer* buffer = &device->buffer;
-                vkr_copy_buffer(&gpu->vkr,cmd,buffer->buffer,gpu->host.buffer[i].buffer.buffer,buffer->size);
-                printf("copied device local buffer to host visible buffer\n");
-            }else printf("copying what exactly?\n");
+            VkMemoryBarrier mb = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+            };
+
+            vkCmdPipelineBarrier(
+                gpu->cmd,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0,
+                1, &mb,
+                0, NULL,
+                0, NULL
+            );
         }
+
+        for(size_t i = 0; i < gpu->host.count; i++){
+            if(gpu->host.host_ptr[i] != NULL){
+                size_t device_idx = gpu->host.device_ptr[i];
+                img_gpu_buffer_t* device = &gpu->device.buffer[device_idx];
+                if(device->type == IMG_GPU_TYPE_IMAGE){
+                    vkr_texture* texture = &device->image;
+
+                    vkr_texture_transition_many(gpu->cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,vkr_texture_subresource_default());
+                    vkr_copy_image_to_buffer(&gpu->vkr,gpu->cmd,gpu->host.buffer[i].buffer.buffer,texture->image,texture->width, texture->height, texture->depth);
+                    printf("copied device local image to host visible buffer\n");
+                    texture->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                }else if(device->type == IMG_GPU_TYPE_BUFFER){
+                    vkr_buffer* buffer = &device->buffer;
+                    vkr_copy_buffer(&gpu->vkr,gpu->cmd,buffer->buffer,gpu->host.buffer[i].buffer.buffer,buffer->size);
+                    //printf("copied device local buffer to host visible buffer\n");
+                }else printf("copying what exactly?\n");
+
+                //gpu->host.host_ptr[i] = NULL;
+            }
+        }
+
+        vkCmdWriteTimestamp(gpu->cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, gpu->vkr.query_pool, 1);
+
+        vkEndCommandBuffer(gpu->cmd);
+        //gpu->cmd_sealed = 1;
     }
 
-    vkr_stc_end(gpu->vkr.device,gpu->vkr.command_pool,gpu->vkr.queue[VKR_QUEUE_GRAPHICS],cmd);
+    const int total_caps = 3;
+    if(rdoc) rdoc->StartFrameCapture(NULL, NULL);
+    //vkr_stc_end(gpu->vkr.device,gpu->vkr.command_pool,gpu->vkr.queue[VKR_QUEUE_GRAPHICS],cmd);
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &gpu->cmd,
+    };
+
+    vkQueueSubmit(gpu->vkr.queue[VKR_QUEUE_GRAPHICS], 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(gpu->vkr.queue[VKR_QUEUE_GRAPHICS]);
+
+    uint64_t timestamps[2];
+    vkGetQueryPoolResults(
+        gpu->vkr.device, gpu->vkr.query_pool, 0, 2,
+        sizeof(timestamps), timestamps, sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT
+    );
+
+    float period = gpu->vkr.properties.limits.timestampPeriod;
+    float ms = (timestamps[1] - timestamps[0]) * period / 1e6f;
+    //printf("GPU time: %.3fms\n", ms);
+    //vkWaitForFences(gpu->vkr.device, 1, &gpu->fence, VK_TRUE, UINT64_MAX);
+    //vkResetFences(gpu->vkr.device, 1, &gpu->fence);
+    if(rdoc){
+        rdoc->EndFrameCapture(NULL, NULL);
+        captures++;
+        if(captures > total_caps) exit(0);
+    }
 
     for(size_t i = 0; i < gpu->host.count; i++){
         if(gpu->host.host_ptr[i] != NULL){
             vkr_buffer* buffer = &gpu->host.buffer[i].buffer;
 
-            void* data;
-            vkMapMemory(gpu->vkr.device, buffer->memory, 0, buffer->size, 0, &data);
-                memcpy(gpu->host.host_ptr[i], data, buffer->size);
-            vkUnmapMemory(gpu->vkr.device, buffer->memory);
+            void* data = gpu->host.mapped_ptr[i];
+            if(gpu->host.mapped_ptr[i] == NULL){
+                vkMapMemory(gpu->vkr.device, buffer->memory, 0, buffer->size, 0, &gpu->host.mapped_ptr[i]);
+                    memcpy(gpu->host.host_ptr[i], gpu->host.mapped_ptr[i], buffer->size);
+                vkUnmapMemory(gpu->vkr.device, buffer->memory);
+            }else memcpy(gpu->host.host_ptr[i], gpu->host.mapped_ptr[i], buffer->size);
         }
     }
 
-
+    vkResetCommandBuffer(gpu->cmd,0);
+    return ms;
 }
 
 void img_gpu_reset(img_gpu_t* gpu){
@@ -510,6 +784,8 @@ void img_gpu_reset(img_gpu_t* gpu){
         vkr_destroy_buffer(&gpu->vkr, &b->buffer);
     }
 
+    vkResetCommandBuffer(gpu->cmd,0);
+    gpu->cmd_sealed = 0;
     gpu->device.count = 0;
     gpu->host.count = 0;
     gpu->stages.count = 0;
@@ -517,7 +793,7 @@ void img_gpu_reset(img_gpu_t* gpu){
 
 // processors
 
-img_t img_program_greyscale(img_t input, int argc, char** argv){
+/*img_t img_program_greyscale(img_t input, int argc, char** argv){
     img_t out = img_create_zero(input.width,input.height,input.depth,input.channels);
     for(size_t i = 0; i < input.width*input.height*input.depth; i++){
         size_t j = input.channels * i;
@@ -929,11 +1205,11 @@ img_t img_program_compound(img_t input, int argc, char** argv){
 
 
     return second;
-}
+}*/
 
 // gpu programs
 
-img_t img_program_gpu_greyscale(img_t input, int argc, char** argv){
+/*img_t img_program_gpu_greyscale(img_t input, int argc, char** argv){
     img_t image_output = img_create_zero(input.width,input.height,input.depth,input.channels);
 
     img_gpu_t gpu = img_gpu_init();
@@ -1228,4 +1504,4 @@ img_t img_program_gpu_hog(img_t input, int argc, char** argv){
     img_gpu_dispatch(&gpu);
 
     return image_output;
-}
+}*/

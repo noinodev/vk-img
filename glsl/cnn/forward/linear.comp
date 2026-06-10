@@ -1,0 +1,57 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 1, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint input_vector;
+    uint output_buf;
+    uint weight_buf;
+    uint bias_buf;
+    uint in_dim;
+    uint out_dim;
+    uint sc_dim;
+    uint relu;
+    uint input_is_texture;
+} pc;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if(i >= pc.out_dim) return;
+
+    float acc = buffers[nonuniformEXT(pc.bias_buf)].data[i];
+
+    if(pc.input_is_texture > 0){
+        uint sq = pc.sc_dim * pc.sc_dim;
+
+        for (uint j = 0; j < pc.in_dim; j++) {
+
+            uint c = j / sq;
+            uint y = (j / pc.sc_dim) % pc.sc_dim;
+            uint x = j % pc.sc_dim;
+
+            float inp = imageLoad(
+                tensors[nonuniformEXT(pc.input_vector)],
+                ivec3(x, y, c)
+            ).r;
+
+            float w = buffers[nonuniformEXT(pc.weight_buf)].data[i * pc.in_dim + j];
+
+            acc += inp * w;
+        }
+    }else{
+        for(uint j = 0; j < pc.in_dim; j++){
+            float inp = buffers[nonuniformEXT(pc.input_vector)].data[j];
+            float w = buffers[nonuniformEXT(pc.weight_buf)].data[i*pc.in_dim+j];
+            acc += inp*w;
+        }
+    }
+
+    if(pc.relu == 1) acc = max(0.,acc);
+
+    buffers[nonuniformEXT(pc.output_buf)].data[i] = acc;
+}

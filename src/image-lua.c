@@ -5,28 +5,29 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-int lua_img_create_fill(lua_State* L){
-    int w = luaL_checkinteger(L,1);
-    int h = luaL_checkinteger(L,2);
-    int d = luaL_checkinteger(L,3);
-    int c = luaL_checkinteger(L,4);
+#include <math.h>
+#include <stdlib.h>
 
-    float col[4] = {0};
-    for(int i = 0; i < c; i++) col[i] = luaL_checknumber(L,5+i);
+int lua_img_fill(lua_State* L){
+    img_t* img = lua_touserdata(L,1);
+    size_t channels = img->channels;
 
-    img_t* image = lua_newuserdata(L,sizeof(img_t));
-    *image = img_create_fill(w,h,d,c,col);
+    double col[4] = {0};
+    for(int i = 0; i < channels; i++) col[i] = (double)luaL_checknumber(L,2+i);
+
+    img_fill(img,col[0],col[1],col[2],col[3]);
     return 1;
 }
 
-int lua_img_create_zero(lua_State* L){
+int lua_img_create(lua_State* L){
     int w = luaL_checkinteger(L,1);
     int h = luaL_checkinteger(L,2);
     int d = luaL_checkinteger(L,3);
     int c = luaL_checkinteger(L,4);
+    int t = luaL_checkinteger(L,5);
 
     img_t* image = lua_newuserdata(L,sizeof(img_t));
-    *image = img_create_zero(w,h,d,c);
+    *image = img_create(w,h,d,c,t);
     return 1;
 }
 
@@ -40,7 +41,7 @@ int lua_img_destroy(lua_State* L){
 
 }*/
 
-int lua_img_get_size(lua_State* L){
+/*int lua_img_get_size(lua_State* L){
     img_t* image = lua_touserdata(L,1);
     lua_pushinteger(L,img_get_size(image));
     return 1;
@@ -65,24 +66,62 @@ int lua_img_channels(lua_State* L){
     img_t* image = lua_touserdata(L,1);
     lua_pushinteger(L, image->channels);
     return 1;
+}*/
+
+int lua_img_dim(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L,image->width);
+    lua_pushinteger(L,image->height);
+    lua_pushinteger(L,image->depth);
+    lua_pushinteger(L,image->channels);
+    printf("dim: %zu %zu %zu %zu\n",image->width,image->height,image->depth,image->channels);
+    return 4;
 }
 
-int lua_img_get_float(lua_State* L){
+int lua_img_meta(lua_State* L){
+    img_t* image = lua_touserdata(L,1);
+    lua_pushinteger(L,image->meta[0]);
+    lua_pushinteger(L,image->meta[1]);
+    return 2;
+}
+
+int lua_img_remap(lua_State* L){
+    img_t* src = lua_touserdata(L,1);
+    img_t* dst = lua_touserdata(L,2);
+    img_remap(src,dst);
+    return 0;
+}
+
+int lua_img_find_max_1d(lua_State* L){
+    img_t* img = lua_touserdata(L,1);
+    float max = -1;
+    size_t x,y,z;
+    for(size_t i = 0; i < img->width; i++){
+        float val = ((float*)img->memory)[i];
+        if(val > max){
+            x = i;
+            max = val;
+        }
+        //printf("label: %zu val: %f\n",i,val);
+    }
+    lua_pushinteger(L,x);
+    lua_pushnumber(L,max);
+    return 2;
+}
+
+/*int lua_img_get_float(lua_State* L){
     img_t* image = lua_touserdata(L,1);
     int x = luaL_checkinteger(L,2);
-    /*int y = luaL_checkinteger(L,3);
-    int z = luaL_checkinteger(L,4);
-    int c = luaL_checkinteger(L,5);*/
 
-    lua_pushnumber(L,image->memory[x]);
+    lua_pushnumber(L,((float)((uint8_t*)image->memory)[x])/255.f);
     return 1;
-}
+}*/
 
 int lua_img_create_from_image(lua_State* L){
     char* file = luaL_checkstring(L,1);
 
     img_t* image = lua_newuserdata(L,sizeof(img_t));
-    *image = img_create_from_image(file,4);
+    *image = img_create_from_image(file,0);
     return 1;
 }
 
@@ -99,6 +138,22 @@ int lua_img_create_from_binary(lua_State* L){
 
     img_t* image = lua_newuserdata(L,sizeof(img_t));
     *image = img_create_from_binary(file);
+    return 1;
+}
+
+int lua_img_print(lua_State* L){
+    img_t* img = lua_touserdata(L,1);
+    for(size_t i = 0; i < img->width; i++){
+        printf("%d ",img->memory[i]);
+    }
+    return 0;
+}
+
+int lua_img_create_from_binary_raw(lua_State* L){
+    char* file = luaL_checkstring(L,1);
+
+    img_t* image = lua_newuserdata(L,sizeof(img_t));
+    *image = img_create_from_binary_raw(file);
     return 1;
 }
 
@@ -130,7 +185,7 @@ int lua_img_read_from_binary_raw(lua_State* L){
     return 0;
 }
 
-int lua_img_
+//int lua_img_create_
 
 int lua_img_create_atlas(lua_State* L){
     char* file = luaL_checkstring(L,1);
@@ -155,9 +210,15 @@ int lua_img_destroy_atlas(lua_State* L){
     return 0;
 }
 
-int lua_img_atlas_size(lua_State* L){
+int lua_img_atlas_count(lua_State* L){
     atlas_t* atlas = lua_touserdata(L,1);
     lua_pushinteger(L,atlas->count);
+    return 1;
+}
+
+int lua_img_atlas_size(lua_State* L){
+    atlas_t* atlas = lua_touserdata(L,1);
+    lua_pushinteger(L,atlas->size);
     return 1;
 }
 
@@ -168,6 +229,16 @@ int lua_img_create_from_atlas(lua_State* L){
     img_t* img = lua_newuserdata(L,sizeof(img_t));
     *img = img_create_from_atlas(atlas,index);
     return 1;
+}
+
+int lua_img_create_batch_from_atlas(lua_State* L){
+    atlas_t* atlas = lua_touserdata(L,1);
+    img_t* image = lua_touserdata(L,2);
+    int index = luaL_checkinteger(L,3);
+    int count = luaL_checkinteger(L,4);
+
+    img_copy_atlas_batch(atlas,image,index,count);
+    return 0;
 }
 
 int lua_gpu_init(lua_State* L){
@@ -209,14 +280,25 @@ int lua_gpu_allocate_buffer(lua_State* L){
     return 1;
 }
 
+int lua_gpu_upload_now(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int input = luaL_checkinteger(L,2);
+    img_t* image = lua_touserdata(L,3);
+
+    lua_pushinteger(L,img_gpu_upload_now(gpu,input,image->memory,img_get_size(image)*img_get_stride(image)));
+    return 1;
+}
+
+
 int lua_gpu_upload(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
     int input = luaL_checkinteger(L,2);
     img_t* image = lua_touserdata(L,3);
 
-    lua_pushinteger(L,img_gpu_upload(gpu,input,image->memory,img_get_size(image)));
+    lua_pushinteger(L,img_gpu_upload(gpu,input,image->memory,img_get_size(image)*img_get_stride(image)));
     return 1;
 }
+
 
 int lua_gpu_map_host(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
@@ -226,12 +308,21 @@ int lua_gpu_map_host(lua_State* L){
     img_gpu_map_host_buffer(gpu, index,image->memory);
 }
 
+int lua_gpu_download_now(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int input = luaL_checkinteger(L,2);
+    img_t* image = lua_touserdata(L,3);
+
+    lua_pushinteger(L,img_gpu_download_now(gpu,input,image->memory,img_get_size(image)*img_get_stride(image)));
+    return 1;
+}
+
 int lua_gpu_download(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
     int input = luaL_checkinteger(L,2);
     img_t* image = lua_touserdata(L,3);
 
-    lua_pushinteger(L,img_gpu_download(gpu,input,image->memory,img_get_size(image)));
+    lua_pushinteger(L,img_gpu_download(gpu,input,image->memory,img_get_size(image)*img_get_stride(image)));
     return 1;
 }
 
@@ -262,11 +353,15 @@ int lua_gpu_add_stage(lua_State* L){
     return 1;
 }
 
-int lua_gpu_add_stage_data(lua_State* L){
+int lua_gpu_add_stage_data_uint(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
     int stage = luaL_checkinteger(L,2);
 
-    int type = lua_type(L, 3);
+    uint32_t val = lua_tointeger(L, 3);
+    img_gpu_add_stage_data(gpu, stage, &val, sizeof(val));
+
+
+    /*int type = lua_type(L, 3);
     if(type == LUA_TNUMBER){
         if(lua_isinteger(L, 3)){
             uint32_t val = lua_tointeger(L, 3);
@@ -276,7 +371,7 @@ int lua_gpu_add_stage_data(lua_State* L){
             img_gpu_add_stage_data(gpu, stage, &val, sizeof(val));
         }
     } else if(type == LUA_TTABLE){
-        // array of floats e.g. a kernel
+        // array of floats, kernel
         int n = lua_rawlen(L, 3);
         float* buf = alloca(n * sizeof(float));
         for(int i = 0; i < n; i++){
@@ -287,6 +382,46 @@ int lua_gpu_add_stage_data(lua_State* L){
         }
         printf("\n");
         img_gpu_add_stage_data(gpu, stage, buf, n * sizeof(float));
+    }else{
+        uint32_t val = 123456;
+        printf("invalid stage data: %f\n",lua_tonumber(L, 3));
+        abort();
+        img_gpu_add_stage_data(gpu, stage, &val, sizeof(val));
+    }*/
+
+    return 0;
+}
+
+int lua_gpu_add_stage_data_float(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int stage = luaL_checkinteger(L,2);
+
+    float val = lua_tonumber(L, 3);
+    img_gpu_add_stage_data(gpu, stage, &val, sizeof(val));
+    return 0;
+}
+
+int lua_gpu_set_stage_data(lua_State* L){
+    img_gpu_t* gpu = lua_touserdata(L,1);
+    int stage = luaL_checkinteger(L,2);
+
+    int offset = luaL_checkinteger(L,4);
+
+    int type = lua_type(L, 3);
+    if(type == LUA_TNUMBER){
+        if(lua_isinteger(L, 3)){
+            uint32_t val = lua_tointeger(L, 3);
+            img_gpu_set_stage_data(gpu, stage, &val, sizeof(val),offset);
+        } else {
+            float val = lua_tonumber(L, 3);
+            img_gpu_set_stage_data(gpu, stage, &val, sizeof(val),offset);
+        }
+        float val = lua_tonumber(L, 3);
+        //printf("modified staging data: %d -> %f\n",offset,val);
+    }else{
+        printf("invalid stage data for a SET can you not??\n");
+        uint32_t val = 123456;
+        img_gpu_set_stage_data(gpu, stage, &val, sizeof(val),offset);
     }
 
     return 0;
@@ -294,8 +429,9 @@ int lua_gpu_add_stage_data(lua_State* L){
 
 int lua_gpu_dispatch(lua_State* L){
     img_gpu_t* gpu = lua_touserdata(L,1);
-    img_gpu_dispatch(gpu);
-    return 0;
+    float t = img_gpu_dispatch(gpu);
+    lua_pushnumber(L,t);
+    return 1;
 }
 
 int lua_gpu_reset(lua_State* L){
@@ -304,18 +440,44 @@ int lua_gpu_reset(lua_State* L){
     return 0;
 }
 
+// special processors
+
+int lua_img_randomize_kaiming_normal(lua_State* L){
+    img_t* img = lua_touserdata(L,1);
+    size_t fan_in = luaL_checkinteger(L,2);
+    size_t size = luaL_checkinteger(L,3);
+
+    float std = sqrt(2./fan_in);
+    float* buf = (float*)img->memory;
+    for(size_t i = 0; i < size; i++){
+        float u1 = (rand()+1) / (float)(RAND_MAX+2.);
+        float u2 = (rand()+1) / (float)(RAND_MAX+2.);
+        float z = sqrt(-2 * log(u1)) * cos(2 * 3.141592654 * u2);
+        buf[i] = z * std;
+    }
+    printf("kaiming fan_in: %zu, size %zu, std %f\n",fan_in,size,std);
+    return 0;
+}
+
+
+// table
+
 static const luaL_Reg img_lib[] = {
-    {"create_fill",lua_img_create_fill},
-    {"create_zero",lua_img_create_zero},
+    {"create",lua_img_create},
+    {"fill",lua_img_fill},
     {"destroy",lua_img_destroy},
-    {"size",lua_img_get_size},
+    /*{"size",lua_img_get_size},
     {"width",lua_img_width},
     {"height",lua_img_height},
     {"depth",lua_img_depth},
     {"channels",lua_img_channels},
-    {"get_float",lua_img_get_float},
+    {"get_float",lua_img_get_float},*/
+    {"dim",lua_img_dim},
+    {"meta",lua_img_meta},
+    {"remap",lua_img_remap},
     {"create_from_image",lua_img_create_from_image},
     {"create_from_binary",lua_img_create_from_binary},
+    {"create_raw",lua_img_create_from_binary_raw},
     {"write_as_image",lua_img_write_as_image},
     {"write_as_binary",lua_img_write_as_binary},
     {"write_raw",lua_img_write_as_binary_raw},
@@ -323,20 +485,32 @@ static const luaL_Reg img_lib[] = {
     {"create_atlas",lua_img_create_atlas},
     {"destroy_atlas",lua_img_destroy_atlas},
     {"create_from_atlas",lua_img_create_from_atlas},
+    {"create_batch_from_atlas",lua_img_create_batch_from_atlas},
+    {"atlas_count",lua_img_atlas_count},
     {"atlas_size",lua_img_atlas_size},
+
+    {"print",lua_img_print},
+
+    {"randomize_kaiming_normal",lua_img_randomize_kaiming_normal},
 
     {"gpu_init",            lua_gpu_init},
     {"gpu_load_program",    lua_gpu_load_program_glsl},
     {"gpu_allocate_image",  lua_gpu_allocate_image},
     {"gpu_allocate_buffer", lua_gpu_allocate_buffer},
+    {"gpu_upload_now",      lua_gpu_upload_now},
     {"gpu_upload",          lua_gpu_upload},
     {"gpu_map_host",        lua_gpu_map_host},
+    {"gpu_download_now",        lua_gpu_download_now},
     {"gpu_download",        lua_gpu_download},
     {"gpu_map_device",      lua_gpu_map_device},
     {"gpu_add_stage",       lua_gpu_add_stage},
-    {"gpu_add_stage_data",  lua_gpu_add_stage_data},
+    {"gpu_push_uint",       lua_gpu_add_stage_data_uint},
+    {"gpu_push_float",      lua_gpu_add_stage_data_float},
+    {"gpu_set_stage_data",  lua_gpu_set_stage_data},
     {"gpu_dispatch",        lua_gpu_dispatch},
     {"gpu_reset",lua_gpu_reset},
+
+    {"class_1d",lua_img_find_max_1d},
     {NULL, NULL}
 };
 

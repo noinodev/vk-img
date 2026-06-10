@@ -1,7 +1,6 @@
 CC = gcc
 GLSLC = glslc
 
-# Detect platform
 ifeq ($(OS),Windows_NT)
     PLATFORM = windows
 else
@@ -45,51 +44,31 @@ else
 
     RM = rm -f
     RMDIR = rm -rf
-    MKDIR = mkdir -p $(SPIRV_DIR)
+    MKDIR = mkdir -p $(SPIRV_DIR) && mkdir -p build
     NULLDEV = >/dev/null 2>&1
 endif
 
-# --- 2. Compiler Flags ---
 INC_FLAGS = $(addprefix -I, $(INCLUDE_DIRS))
 LDFLAGS = $(addprefix -L, $(LIB_DIRS)) $(addprefix -l, $(LIBS))
 CFLAGS = -g -O0 -march=native $(INC_FLAGS) -MMD -MP
 
-# --- 3. Source & Object Discovery ---
 SRC = $(wildcard src/*.c)
 BUILD_DIR = build
 OBJ = $(patsubst src/%.c, $(BUILD_DIR)/%.o, $(SRC))
 DEP = $(OBJ:.o=.d)
 
-# --- 4. Shader Discovery ---
-SHADER_SRC = $(wildcard glsl/*)
-SPIRV_DIR = spv
-# Simplified shader mapping: just append .spv to the filename
-SHADER_SPV = $(patsubst glsl/%, $(SPIRV_DIR)/%.spv, $(SHADER_SRC))
+all: $(OUT)
 
-# --- 5. Rules ---
-all: shaders $(OUT)
-
-# Link
 $(OUT): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Compile C (with auto-dir creation)
 $(BUILD_DIR)/%.o: src/%.c
-	@$(MKDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Compile Shaders
-#$(SPIRV_DIR)/%.spv: glsl/%
-#	@$(MKDIR)
-#	$(GLSLC) $< -o $@
-
-#shaders: $(SHADER_SPV)
-
-# Include dependency files
 -include $(DEP)
 
 clean:
 	-$(RM) $(OUT) $(OBJ) $(DEP) $(SHADER_SPV) $(NULLDEV)
 	-$(RMDIR) $(SPIRV_DIR) $(BUILD_DIR) $(NULLDEV)
 
-.PHONY: all shaders clean
+.PHONY: all clean

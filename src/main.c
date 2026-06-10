@@ -21,8 +21,10 @@
 #define IMAGE_IMPL
 #include "image.h"
 #include "image-lua.h"
+#include <time.h>
 
 int main(int argc, char** argv){
+	srand(time(NULL));
 
 	int status;
 	lua_State* L = luaL_newstate();

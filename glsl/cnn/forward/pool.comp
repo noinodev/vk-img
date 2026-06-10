@@ -1,0 +1,49 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint input_tensor;
+    uint output_tensor;
+    uint index_buf;
+    uint out_w;
+    uint out_h;
+    uint ch;
+} pc;
+
+void main() {
+    
+    uint x  = gl_GlobalInvocationID.x;
+    uint y  = gl_GlobalInvocationID.y;
+    uint out_ch = gl_GlobalInvocationID.z;
+
+    if(x >= pc.out_w || y >= pc.out_h || out_ch >= pc.ch) return;
+
+    int ix = int(x) * 2;
+    int iy = int(y) * 2;
+
+    float a = imageLoad(tensors[nonuniformEXT(pc.input_tensor)], ivec3(ix,   iy,   out_ch)).r;
+    float b = imageLoad(tensors[nonuniformEXT(pc.input_tensor)], ivec3(ix+1, iy,   out_ch)).r;
+    float c = imageLoad(tensors[nonuniformEXT(pc.input_tensor)], ivec3(ix,   iy+1, out_ch)).r;
+    float d = imageLoad(tensors[nonuniformEXT(pc.input_tensor)], ivec3(ix+1, iy+1, out_ch)).r;
+
+    float maxval = max(max(a, b), max(c, d));
+
+    // record which input won, needed for backward pass
+    uint flat_w = pc.out_w * 2;
+    uint winner;
+    if      (maxval == a) winner = uint(iy)   * flat_w + uint(ix);
+    else if (maxval == b) winner = uint(iy)   * flat_w + uint(ix+1);
+    else if (maxval == c) winner = uint(iy+1) * flat_w + uint(ix);
+    else                  winner = uint(iy+1) * flat_w + uint(ix+1);
+
+    uint out_idx = out_ch * (pc.out_w * pc.out_h) + y * pc.out_w + x;
+    buffers[nonuniformEXT(pc.index_buf)].data[out_idx] = uintBitsToFloat(winner);
+
+    imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, out_ch), vec4(maxval, 0.0, 0.0, 0.0));
+}
