@@ -66,12 +66,12 @@ void main() {
         }
     }
 
-    if (pc.relu != 0) {
+    /*if (pc.relu != 0) {
         acc0 = max(acc0, 0.0);
         acc1 = max(acc1, 0.0);
         acc2 = max(acc2, 0.0);
         acc3 = max(acc3, 0.0);
-    }
+    }*/
 
     imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 0), vec4(acc0));
     imageStore(tensors[nonuniformEXT(pc.output_tensor)], ivec3(x, y, oc_base + 1), vec4(acc1));

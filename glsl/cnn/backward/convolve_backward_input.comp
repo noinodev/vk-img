@@ -32,6 +32,7 @@ void main(){
 
     uint kernel_size = pc.kH * pc.kW;
 
+    // Inside your ix/iy/c dispatch loop:
     float sum = 0.0;
 
     for(uint k = 0; k < pc.out_ch; k++){
@@ -43,6 +44,7 @@ void main(){
                 int ox = int(ix) - int(kx) + int(pc.pad);
                 if(ox < 0 || ox >= int(pc.out_w)) continue;
 
+                // Load upstream gradient (which has already been perfectly masked by your new ReLU backward layer)
                 float g = imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], ivec3(ox, oy, k)).r;
 
                 float w = buffers[nonuniformEXT(pc.weights)].data[
@@ -56,11 +58,14 @@ void main(){
         }
     }
 
+    // Pure storage, no trailing ReLU logic
+    imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(sum));
+
     // ReLU gate
-    if(pc.relu != 0){
+    /*if(pc.relu != 0){
         float a = imageLoad(tensors[nonuniformEXT(pc.act)], ivec3(ix, iy, c)).r;
         if(a <= 0.0) sum = 0.0;
     }
 
-    imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(sum));
+    imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(sum));*/
 }

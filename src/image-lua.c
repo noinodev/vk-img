@@ -93,20 +93,32 @@ int lua_img_remap(lua_State* L){
 }
 
 int lua_img_find_max_1d(lua_State* L){
-    img_t* img = lua_touserdata(L,1);
+    img_t* img = lua_touserdata(L, 1);
+    size_t true_label = luaL_checkinteger(L, 2); // Pass the true label from Lua
+    
     float max = -1;
-    size_t x,y,z;
+    size_t predicted_x = 0;
+    float true_label_prob = 0.0f;
+
     for(size_t i = 0; i < img->width; i++){
         float val = ((float*)img->memory)[i];
+        
+        // Track the network's highest prediction
         if(val > max){
-            x = i;
+            predicted_x = i;
             max = val;
         }
-        //printf("label: %zu val: %f\n",i,val);
+        
+        // Grab the probability of the actual correct target
+        if(i == true_label) {
+            true_label_prob = val;
+        }
     }
-    lua_pushinteger(L,x);
-    lua_pushnumber(L,max);
-    return 2;
+    
+    lua_pushinteger(L, predicted_x);
+    lua_pushnumber(L, max);
+    lua_pushnumber(L, true_label_prob); // Now returning 3 values
+    return 3;
 }
 
 /*int lua_img_get_float(lua_State* L){

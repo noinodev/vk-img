@@ -10,14 +10,14 @@ transform = transforms.Compose([
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 ])
 
-trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform)
+trainset = torchvision.datasets.CIFAR100(root='./cnn/data', train=True, download=True, transform=transform)
 
 # To match your 500-image overfitting test, create a subset
 # Remove these 2 lines if you want to switch back to the full 50,000 images later
 subset_indices = list(range(10000))
 trainset = torch.utils.data.Subset(trainset, subset_indices)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=False)
 
 class VulkanMiniVGG7(nn.Module):
     def __init__(self):

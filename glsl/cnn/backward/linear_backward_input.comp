@@ -23,13 +23,24 @@ void main(){
     float sum = 0.;
 
     for(uint j = 0; j < pc.out_dim; j++){
+        //uint w_idx = j * pc.in_dim + i;
+        //sum += buffers[nonuniformEXT(pc.weights)].data[w_idx] * buffers[nonuniformEXT(pc.next_grad_act)].data[j];
+        float incoming_grad = buffers[nonuniformEXT(pc.next_grad_act)].data[j];
+        
+        // Fused ReLU Check: Gate the incoming gradient BEFORE multiplying by weights
+        if(pc.relu != 0){
+            if(buffers[nonuniformEXT(pc.act)].data[j] <= 0.) {
+                incoming_grad = 0.0;
+            }
+        }
+
         uint w_idx = j * pc.in_dim + i;
-        sum += buffers[nonuniformEXT(pc.weights)].data[w_idx] * buffers[nonuniformEXT(pc.next_grad_act)].data[j];
+        sum += buffers[nonuniformEXT(pc.weights)].data[w_idx] * incoming_grad;
     }
 
-    if(pc.relu != 0){
+    /*if(pc.relu != 0){
         if(buffers[nonuniformEXT(pc.act)].data[i] <= 0.) sum = 0.;
-    }
+    }*/
 
     buffers[nonuniformEXT(pc.grad_act)].data[i] = sum;
 }

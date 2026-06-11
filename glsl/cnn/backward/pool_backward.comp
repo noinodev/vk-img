@@ -1,4 +1,4 @@
-#version 460
+/*#version 460
 #extension GL_EXT_nonuniform_qualifier : enable
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -31,4 +31,57 @@ void main(){
     ivec3 idx = ivec3(winner % pc.in_w, winner / pc.in_w, c);
     float val = imageLoad(tensors[nonuniformEXT(pc.grad_act)], idx).r + grad;
     imageStore(tensors[nonuniformEXT(pc.grad_act)], idx, vec4(val));
+}*/
+
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+// Grid matches the LARGER input shape (pc.in_w, pc.in_h)
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set=0, binding = 1, r32f) uniform image3D tensors[];
+layout(set=0, binding = 3) buffer SSBO {
+    float data[];
+} buffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint next_grad_act; // Pooled gradient (smaller)
+    uint grad_act;      // Target gradient (larger)
+    uint indices;       // MaxPool winner indices
+    uint out_w;         // Pooled width
+    uint out_h;         // Pooled height
+    uint ch;
+    uint in_w;          // Original width
+    uint in_h;          // Original height
+} pc;
+
+void main(){
+    // Threads track the target unpooled pixel coordinates
+    uint ix = gl_GlobalInvocationID.x;
+    uint iy = gl_GlobalInvocationID.y;
+    uint c  = gl_GlobalInvocationID.z;
+    
+    if(ix >= pc.in_w || iy >= pc.in_h || c >= pc.ch) return;
+
+    // Figure out which pooled pixel this coordinate maps to
+    uint px = ix / 2;
+    uint py = iy / 2;
+
+    // Find the flat winner index stored during the forward pass for this window
+    uint pooled_idx = c * (pc.out_w * pc.out_h) + py * pc.out_w + px;
+    uint winner = floatBitsToUint(buffers[nonuniformEXT(pc.indices)].data[pooled_idx]);
+
+    // Calculate current flat index of this specific thread
+    uint current_flat_idx = iy * pc.in_w + ix;
+
+    float val = 0.0;
+    // If THIS specific pixel was the winner, it inherits the gradient
+    if (winner == current_flat_idx) {
+        val = imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], ivec3(px, py, c)).r;
+    }
+
+    // Accumulate or cleanly store without any thread collisions!
+    //float existing_grad = imageLoad(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c)).r;
+    //imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(existing_grad + val));
+    imageStore(tensors[nonuniformEXT(pc.grad_act)], ivec3(ix, iy, c), vec4(val));
 }

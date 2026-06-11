@@ -8,10 +8,10 @@ setmetatable(_G, {
 
 local API = {}
 local buffers = {}
-local program_to3d, program_to2d, program_conv, program_pool, program_linear, program_softmax, program_classify
+local program_to3d, program_to2d, program_conv, program_relu, program_pool, program_linear, program_softmax, program_classify
 local program_lossgrad, program_conv_backward_input, progam_conv_backward_weights, program_conv_backward_bias
 local program_pool_backward, program_linear_backward_input, program_linear_backward_weights, program_linear_backward_bias
-local program_adam
+local program_adam, program_relu_backward
 
 --[[
 	load all GLSL programs. program will crash if you dont call this first
@@ -21,6 +21,7 @@ function API.load(gpu)
 	program_to2d = img.gpu_load_program(gpu,"glsl/cnn/to2d.comp",8,8,1)
 
 	program_conv = img.gpu_load_program(gpu,"glsl/cnn/forward/convolve.comp",8,8,4)
+	program_relu = img.gpu_load_program(gpu,"glsl/cnn/forward/relu.comp",8,8,1)
 	program_pool = img.gpu_load_program(gpu,"glsl/cnn/forward/pool.comp",8,8,1)
 	program_linear = img.gpu_load_program(gpu,"glsl/cnn/forward/linear.comp",8,1,1)
 	program_softmax = img.gpu_load_program(gpu,"glsl/cnn/forward/softmax.comp",8,1,1)
@@ -30,6 +31,8 @@ function API.load(gpu)
 	program_conv_backward_input = img.gpu_load_program(gpu,"glsl/cnn/backward/convolve_backward_input.comp",1,1,1)
 	program_conv_backward_weights = img.gpu_load_program(gpu,"glsl/cnn/backward/convolve_backward_weights.comp",1,1,1)
 	program_conv_backward_bias = img.gpu_load_program(gpu,"glsl/cnn/backward/convolve_backward_bias.comp",1,1,1)
+
+	program_relu_backward = img.gpu_load_program(gpu,"glsl/cnn/backward/relu_backward.comp",8,8,1)
 
 	program_pool_backward = img.gpu_load_program(gpu,"glsl/cnn/backward/pool_backward.comp",8,8,1)
 
@@ -56,6 +59,20 @@ function API.conv(gpu,in_act,out_act,weights,bias,w,h,ch_in,ch_out)
     img.gpu_push_uint(gpu, pass, ch_in)
     img.gpu_push_uint(gpu, pass, ch_out)
 	img.gpu_push_uint(gpu, pass, 1) -- relu on
+
+	return pass
+end
+
+--gpu, prev_act, layer.act, L.w, L.h, L.ch
+function API.relu(gpu,in_act,out_act,w,h,ch)
+	print("relu forward")
+	local pass = img.gpu_add_stage(gpu,program_relu,w,h,ch)
+
+	img.gpu_push_uint(gpu, pass, in_act)
+    img.gpu_push_uint(gpu, pass, out_act)
+    img.gpu_push_uint(gpu, pass, w)
+    img.gpu_push_uint(gpu, pass, h)
+    img.gpu_push_uint(gpu, pass, ch)
 
 	return pass
 end
@@ -182,6 +199,11 @@ function API.build(gpu, definition, input_binding, first_binding)
 			layer.size_b = L.ch_out
 
 			layer.program = API.conv(gpu, prev_act, layer.act, layer.weights, layer.bias, L.w, L.h, L.ch_in, L.ch_out)
+		elseif L.type == "relu" then
+            layer.act = next_binding()
+            layer.gpu_a = img.gpu_allocate_image(gpu, layer.act, L.w, L.h, L.ch, 1)
+            
+            layer.program = API.relu(gpu, prev_act, layer.act, L.w, L.h, L.ch)
 		elseif L.type == "pool" then
 			layer.act = next_binding()
 			layer.indices = next_binding()
@@ -262,13 +284,14 @@ end
 --[[
 	updates weights based on gradient
 ]]
-function API.conv_backward_weights(gpu, prev_act, next_grad_act, grad_weights, w, h, ch_in, ch_out)
+function API.conv_backward_weights(gpu, prev_act, next_grad_act, grad_weights,act, w, h, ch_in, ch_out)
 	print("conv back weight")
     local pass = img.gpu_add_stage(gpu, program_conv_backward_weights, ch_out, ch_in, 1)
 
     img.gpu_push_uint(gpu, pass, prev_act)
     img.gpu_push_uint(gpu, pass, next_grad_act)
     img.gpu_push_uint(gpu, pass, grad_weights)
+	img.gpu_push_uint(gpu, pass, act)
     img.gpu_push_uint(gpu, pass, ch_in)
     img.gpu_push_uint(gpu, pass, ch_out)
     img.gpu_push_uint(gpu, pass, h)   -- in_h
@@ -278,6 +301,7 @@ function API.conv_backward_weights(gpu, prev_act, next_grad_act, grad_weights, w
     img.gpu_push_uint(gpu, pass, 3)   -- kH
     img.gpu_push_uint(gpu, pass, 3)   -- kW
     img.gpu_push_uint(gpu, pass, 1)   -- pad
+	img.gpu_push_uint(gpu, pass, 1      | 0) 
 end
 
 --[[
@@ -294,8 +318,31 @@ function API.conv_backward_bias(gpu, next_grad_act, grad_bias, w, h, ch_out)
 	img.gpu_push_uint(gpu, pass, ch_out)
 end
 
+--PI.relu_backward(gpu, next_layer.grad_act, layer.grad_act, layer.act, L.w, L.h, L.ch)
+function API.relu_backward(gpu, next_grad_act, grad_act, act, w, h, ch)
+	print("relu back")
+	local pass = img.gpu_add_stage(gpu,program_relu_backward,w,h,ch)
+
+	img.gpu_push_uint(gpu, pass, next_grad_act)
+	img.gpu_push_uint(gpu, pass, grad_act)
+	img.gpu_push_uint(gpu, pass, act)
+	img.gpu_push_uint(gpu, pass, w)
+	img.gpu_push_uint(gpu, pass, h)
+	img.gpu_push_uint(gpu, pass, ch)
+end
+
 function API.pool_backward(gpu, next_grad_act, grad_act, indices, w, h, ch)
-    local pass = img.gpu_add_stage(gpu, program_pool_backward, w//2, h//2, ch)
+	--[[
+	uint next_grad_act; // Pooled gradient (smaller)
+    uint grad_act;      // Target gradient (larger)
+    uint indices;       // MaxPool winner indices
+    uint out_w;         // Pooled width
+    uint out_h;         // Pooled height
+    uint ch;
+    uint in_w;          // Original width
+    uint in_h;          // Original height
+	]]
+    local pass = img.gpu_add_stage(gpu, program_pool_backward, w, h, ch)
     img.gpu_push_uint(gpu, pass, next_grad_act)
     img.gpu_push_uint(gpu, pass, grad_act)
     img.gpu_push_uint(gpu, pass, indices)
@@ -303,6 +350,7 @@ function API.pool_backward(gpu, next_grad_act, grad_act, indices, w, h, ch)
     img.gpu_push_uint(gpu, pass, h//2)  -- out_h
     img.gpu_push_uint(gpu, pass, ch)
     img.gpu_push_uint(gpu, pass, w)     -- in_w for winner unpacking
+	img.gpu_push_uint(gpu, pass, h)
 end
 
 function API.linear_backward_input(gpu, next_grad_act, grad_act, weights, in_dim, out_dim, relu, act)
@@ -318,7 +366,7 @@ function API.linear_backward_input(gpu, next_grad_act, grad_act, weights, in_dim
 	img.gpu_push_uint(gpu, pass, act)
 end
 
-function API.linear_backward_weights(gpu, prev_act, next_grad_act, grad_weights, in_dim, out_dim, prev)
+function API.linear_backward_weights(gpu, prev_act, next_grad_act, grad_weights, in_dim, out_dim, sc_dim, prev)
 	print("lin back weight")
 	local pass = img.gpu_add_stage(gpu,program_linear_backward_weights,in_dim,out_dim,1)
 
@@ -327,6 +375,7 @@ function API.linear_backward_weights(gpu, prev_act, next_grad_act, grad_weights,
 	img.gpu_push_uint(gpu, pass, grad_weights)
 	img.gpu_push_uint(gpu, pass, in_dim)
 	img.gpu_push_uint(gpu, pass, out_dim)
+	img.gpu_push_uint(gpu, pass, sc_dim)
 	img.gpu_push_uint(gpu, pass, prev and 1 or 0)
 end
 
@@ -399,15 +448,23 @@ function API.train(gpu, net, first_binding, lr, eps)
 			layer.gpu_mb = img.gpu_allocate_buffer(gpu, layer.adam_mb, L.ch_out)
 			layer.gpu_vb = img.gpu_allocate_buffer(gpu, layer.adam_vb, L.ch_out)
 
-			if L.ch_out * L.ch_in * 9 > max_size then max_size = L.ch_out * L.ch_in * 9 end
+			if L.ch_out * L.ch_in * 9 > max_size then max_size = L.ch_out * L.ch_in * 9  end
 
 			API.conv_backward_input(gpu, next_layer.grad_act, layer.grad_act, layer.weights, layer.act, L.w, L.h, L.ch_in, L.ch_out)
-			API.conv_backward_weights(gpu,prev_act, next_layer.grad_act, layer.grad_weights, L.w, L.h, L.ch_in, L.ch_out)
+			API.conv_backward_weights(gpu,prev_act, next_layer.grad_act, layer.grad_weights, layer.act, L.w, L.h, L.ch_in, L.ch_out)
 			API.conv_backward_bias(gpu, next_layer.grad_act, layer.grad_bias, L.w, L.h, L.ch_out)
+
+		elseif L.type == "relu" then
+            layer.grad_act = next_binding()
+            layer.gpu_ga = img.gpu_allocate_image(gpu, layer.grad_act, L.w, L.h, L.ch, 1)
+
+            -- Pass upstream grad, destination grad, and forward activations for masking
+            API.relu_backward(gpu, next_layer.grad_act, layer.grad_act, layer.act, L.w, L.h, L.ch)
 		
 		elseif L.type == "pool" then
 			layer.grad_act = next_binding()
 			-- allocate at FULL input size, not output size
+
 			layer.gpu_ga = img.gpu_allocate_image(gpu, layer.grad_act, L.w, L.h, L.ch, 1)
 
 			API.pool_backward(gpu, next_layer.grad_act, layer.grad_act, layer.indices, L.w, L.h, L.ch, L.next)
@@ -429,8 +486,14 @@ function API.train(gpu, net, first_binding, lr, eps)
 			layer.gpu_mb = img.gpu_allocate_buffer(gpu, layer.adam_mb, L.out_dim)
 			layer.gpu_vb = img.gpu_allocate_buffer(gpu, layer.adam_vb, L.out_dim)
 
+			local dim = 1
+			if net.layers[i-1].type == "pool" then dim = math.sqrt(L.in_dim / net.layers[i-1].def.ch) | 0 end
+			print("fuck you",dim)
+
+			if L.in_dim > max_size then max_size = L.in_dim  end
+
 			API.linear_backward_input(gpu, next_layer.grad_act, layer.grad_act, layer.weights, L.in_dim, L.out_dim, L.relu, layer.act)
-			API.linear_backward_weights(gpu, prev_act, next_layer.grad_act, layer.grad_weights, L.in_dim, L.out_dim, L.prev)
+			API.linear_backward_weights(gpu, prev_act, next_layer.grad_act, layer.grad_weights, L.in_dim, L.out_dim, dim, L.prev)
 			API.linear_backward_bias(gpu, next_layer.grad_act, layer.grad_bias, L.out_dim)
         end
 	end
@@ -447,7 +510,7 @@ function API.train(gpu, net, first_binding, lr, eps)
 		end
 	end
 
-	local zeros = img.create(max_size, 1, 1, 1, 3)  -- calloc'd so already zero
+	local zeros = img.create(max_size*2, 1, 1, 1, 3)  -- calloc'd so already zero
 	-- cpu side is free, just reuse it
 
 	for i, layer in ipairs(net.layers) do
@@ -460,6 +523,8 @@ function API.train(gpu, net, first_binding, lr, eps)
 			img.gpu_upload_now(gpu, layer.gpu_vw, zeros)
 			img.gpu_upload_now(gpu, layer.gpu_mb, zeros)
 			img.gpu_upload_now(gpu, layer.gpu_vb, zeros)
+		elseif L.type == "relu" then
+            img.gpu_upload_now(gpu, layer.gpu_ga, zeros)
 		elseif L.type == "linear" then
 			img.gpu_upload_now(gpu, layer.gpu_ga, zeros)
 			img.gpu_upload_now(gpu, layer.gpu_gw, zeros)

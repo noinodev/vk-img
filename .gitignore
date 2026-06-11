@@ -1,4 +1,6 @@
 **.bin
 datasets/**
+**/data/**
 build/**
 .vscode/
+**.zip

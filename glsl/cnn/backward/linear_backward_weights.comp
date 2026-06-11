@@ -13,6 +13,7 @@ layout(push_constant) uniform PushConstants {
     uint grad_weights;
     uint in_dim;
     uint out_dim;
+    uint sc_dim;
     uint input_is_texture;
 } pc;
 
@@ -21,10 +22,20 @@ void main(){
     uint j = gl_GlobalInvocationID.y;
     if(i >= pc.in_dim || j >= pc.out_dim) return;
 
+    uint sq = pc.sc_dim * pc.sc_dim;
     uint idx = j * pc.in_dim + i;
     float m;
     if(pc.input_is_texture > 0){
-        m = imageLoad(tensors[nonuniformEXT(pc.prev_act)],ivec3(0,0,i)).r;
+        uint c = i / sq;
+        uint y = (i / pc.sc_dim) % pc.sc_dim;
+        uint x = i % pc.sc_dim;
+
+        m = imageLoad(
+            tensors[nonuniformEXT(pc.prev_act)],
+            ivec3(x, y, c)
+        ).r;
+
+        //m = imageLoad(tensors[nonuniformEXT(pc.prev_act)],ivec3(0,0,i)).r;
     }else{
         m = buffers[nonuniformEXT(pc.prev_act)].data[i];
     }

@@ -650,7 +650,7 @@ float img_gpu_dispatch(img_gpu_t* gpu){
             }
         }
 
-        /*for(size_t i = 0; i < gpu->device.count; i++){
+        for(size_t i = 0; i < gpu->device.count; i++){
             img_gpu_buffer_t* buffer = &gpu->device.buffer[i];
             if(buffer->type != IMG_GPU_TYPE_IMAGE) continue;
 
@@ -658,7 +658,7 @@ float img_gpu_dispatch(img_gpu_t* gpu){
 
             vkr_texture_transition_many(gpu->cmd,1,&texture->image,texture->layout,VK_IMAGE_LAYOUT_GENERAL,vkr_texture_subresource_default());
             texture->layout = VK_IMAGE_LAYOUT_GENERAL;
-        }*/
+        }
 
         vkCmdBindDescriptorSets(
             gpu->cmd,

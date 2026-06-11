@@ -1,0 +1,34 @@
+#version 450
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 1, r32f) uniform image3D tensors[];
+
+layout(push_constant) uniform PushConstants {
+    uint next_grad_act; // Upstream gradient from next layer (e.g., pool)
+    uint grad_act;      // Downstream gradient to pass back to conv
+    uint act;           // Post-ReLU forward activation (used as the mask)
+    uint w;
+    uint h;
+    uint ch;
+} pc;
+
+void main() {
+    ivec3 pos = ivec3(gl_GlobalInvocationID.xyz);
+    if (pos.x >= int(pc.w) || pos.y >= int(pc.h) || pos.z >= int(pc.ch)) return;
+
+    // 1. Load the upstream gradient
+    float g = imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], pos).r;
+
+    // 2. Load the forward pass output activation
+    float out_act = imageLoad(tensors[nonuniformEXT(pc.act)], pos).r;
+
+    // 3. Gate the gradient: if the neuron didn't fire forward, block the gradient backward
+    if (out_act <= 0.0) {
+        g = 0.0;
+    }
+
+    // 4. Store the gated gradient for the Conv layer to consume
+    imageStore(tensors[nonuniformEXT(pc.grad_act)], pos, vec4(g));
+}

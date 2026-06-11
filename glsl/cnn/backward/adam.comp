@@ -38,7 +38,7 @@ void main() {
     float m_hat = m / pc.bias1;
     float v_hat = v / pc.bias2;
 
-    float denom = sqrt(v_hat + pc.eps);
+    float denom = sqrt(v_hat) + pc.eps;
 
     w = w - pc.lr * (m_hat / denom);
 

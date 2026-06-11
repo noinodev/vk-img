@@ -3,15 +3,21 @@ import numpy as np
 from PIL import Image
 import io
 
-table = pq.read_table(input("input parquet:"))
+table = pq.read_table(input("input parquet: "))
+num_rows = len(table)
+shuffled_indices = np.random.permutation(num_rows)
+shuffled_table = table.take(shuffled_indices)
 
-coarse = table["coarse_label"].to_numpy()
-fine   = table["fine_label"].to_numpy()
-images = table["img"]
+coarse = shuffled_table["label"].to_numpy() # mnist format
+fine = coarse
+images = shuffled_table["image"]
+
+#coarse = shuffled_table["coarse"].to_numpy() # cifar format
+#fine = coshuffled_table["fine"].to_numpy()arse
+#images = shuffled_table["img"]
 
 count = len(coarse)
 
-# --- lock image format ---
 sample = Image.open(io.BytesIO(images[0].as_py()["bytes"])).convert("RGB")
 sample = np.array(sample, dtype=np.uint8)
 
@@ -34,16 +40,10 @@ out_path = input("file output as: ")
 with open(out_path, "wb") as f:
     f.write(header.tobytes())
 
-    # -------------------------
-    # BLOCK 1: ALL LABELS
-    # -------------------------
     for i in range(count):
         f.write(np.uint8(coarse[i]).tobytes())
         f.write(np.uint8(fine[i]).tobytes())
-
-    # -------------------------
-    # BLOCK 2: ALL IMAGES
-    # -------------------------
+    
     for i in range(count):
         img = Image.open(io.BytesIO(images[i].as_py()["bytes"])).convert("RGB")
         img = img.resize((width, height), Image.LANCZOS)

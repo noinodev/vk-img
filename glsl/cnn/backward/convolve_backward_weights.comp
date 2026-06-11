@@ -11,6 +11,7 @@ layout(push_constant) uniform PushConstants {
     uint prev_act; // image3D index: input activations [in_ch,  in_h,  in_w]
     uint next_grad_act; // image3D index: upstream gradient [out_ch, out_h, out_w]
     uint grad_weights; // buffer index: weight gradient [out_ch, in_ch, kH, kW]
+    uint act; // image3D index: forward activations for ReLU gate
     uint in_ch;
     uint out_ch;
     uint in_h;
@@ -20,6 +21,7 @@ layout(push_constant) uniform PushConstants {
     uint kH;
     uint kW;
     uint pad;
+    uint relu;
 } pc;
 
 void main(){
@@ -32,6 +34,7 @@ void main(){
     for(uint ky = 0; ky < pc.kH; ky++){
         for(uint kx = 0; kx < pc.kW; kx++){
 
+            // Inside your k/c/ky/kx dispatch loop:
             float sum = 0.0;
 
             for(uint oy = 0; oy < pc.out_h; oy++){
@@ -42,18 +45,17 @@ void main(){
                     int ix = int(ox + kx) - int(pc.pad);
                     if(ix < 0 || ix >= int(pc.in_w)) continue;
 
+                    // Upstream gradient is pre-gated!
                     float g = imageLoad(tensors[nonuniformEXT(pc.next_grad_act)], ivec3(ox, oy, k)).r;
-                    float a = imageLoad(tensors[nonuniformEXT(pc.prev_act)],       ivec3(ix, iy, c)).r;
+                    float a = imageLoad(tensors[nonuniformEXT(pc.prev_act)],  ivec3(ix, iy, c)).r;
 
                     sum += g * a;
                 }
             }
 
-            uint w_idx = k * (pc.in_ch * kernel_size)
-                       + c * kernel_size
-                       + ky * pc.kW
-                       + kx;
-            buffers[nonuniformEXT(pc.grad_weights)].data[w_idx] = sum;
+            // Write directly out to the gradient buffer
+            uint weight_idx = k * (pc.in_ch * kernel_size) + c * kernel_size + ky * pc.kW + kx;
+            buffers[nonuniformEXT(pc.grad_weights)].data[weight_idx] = sum;
         }
     }
 }

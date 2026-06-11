@@ -1,3 +1,105 @@
-\begin{thebibliography}{}
+\begin{thebibliography}{10}
+
+\bibitem{goos_captcha_2003}
+L.~Von~Ahn, M.~Blum, N.~J. Hopper, and J.~Langford, ``{CAPTCHA}: {Using} {Hard}
+  {AI} {Problems} for {Security},'' in {\em Advances in {Cryptology} —
+  {EUROCRYPT} 2003} (G.~Goos, J.~Hartmanis, J.~Van~Leeuwen, and E.~Biham,
+  eds.), vol.~2656, pp.~294--311, Berlin, Heidelberg: Springer Berlin
+  Heidelberg, 2003.
+\newblock Series Title: Lecture Notes in Computer Science.
+
+\bibitem{breiman_random_2001}
+L.~Breiman, ``Random {Forests},'' {\em Machine Learning}, vol.~45, pp.~5--32,
+  Oct. 2001.
+
+\bibitem{cover_nearest_1967}
+T.~Cover and P.~Hart, ``Nearest neighbor pattern classification,'' {\em IEEE
+  Transactions on Information Theory}, vol.~13, pp.~21--27, Jan. 1967.
+
+\bibitem{cortes_support-vector_1995}
+C.~Cortes and V.~Vapnik, ``Support-vector networks,'' {\em Machine Learning},
+  vol.~20, pp.~273--297, Sept. 1995.
+
+\bibitem{rumelhart_learning_1986}
+D.~E. Rumelhart, G.~E. Hinton, and R.~J. Williams, ``Learning representations
+  by back-propagating errors,'' {\em Nature}, vol.~323, pp.~533--536, Oct.
+  1986.
+
+\bibitem{lecun_gradient-based_1998}
+Y.~Lecun, L.~Bottou, Y.~Bengio, and P.~Haffner, ``Gradient-based learning
+  applied to document recognition,'' {\em Proceedings of the IEEE}, vol.~86,
+  pp.~2278--2324, Nov. 1998.
+
+\bibitem{khronos_group_vulkan_2026}
+{Khronos Group}, ``Vulkan 1.4 {Specification},'' 2026.
+
+\bibitem{geirhos_shortcut_2020}
+R.~Geirhos, J.-H. Jacobsen, C.~Michaelis, R.~Zemel, W.~Brendel, M.~Bethge, and
+  F.~A. Wichmann, ``Shortcut {Learning} in {Deep} {Neural} {Networks},'' {\em
+  Nature Machine Intelligence}, vol.~2, pp.~665--673, Nov. 2020.
+\newblock arXiv:2004.07780 [cs.CV].
+
+\bibitem{krizhevsky_learning_2009}
+A.~Krizhevsky, ``Learning {Multiple} {Layers} of {Features} from {Tiny}
+  {Images},'' 2009.
+
+\bibitem{deng_imagenet_2009}
+J.~Deng, W.~Dong, R.~Socher, L.-J. Li, {Kai Li}, and {Li Fei-Fei},
+  ``{ImageNet}: {A} large-scale hierarchical image database,'' in {\em 2009
+  {IEEE} {Conference} on {Computer} {Vision} and {Pattern} {Recognition}},
+  (Miami, FL), pp.~248--255, IEEE, June 2009.
+
+\bibitem{krizhevsky_imagenet_2017}
+A.~Krizhevsky, I.~Sutskever, and G.~E. Hinton, ``{ImageNet} classification with
+  deep convolutional neural networks,'' {\em Communications of the ACM},
+  vol.~60, pp.~84--90, May 2017.
+
+\bibitem{otsu_threshold_1979}
+N.~Otsu, ``A {Threshold} {Selection} {Method} from {Gray}-{Level}
+  {Histograms},'' {\em IEEE Transactions on Systems, Man, and Cybernetics},
+  vol.~9, pp.~62--66, Jan. 1979.
+
+\bibitem{sobel_sobel-feldman_1968}
+I.~Sobel, R.~Duda, P.~Hart, and J.~Wiley, ``Sobel-feldman operator,'' {\em
+  Preprint at https://www. researchgate.
+  net/profile/Irwin-Sobel/publication/285159837. Accessed}, vol.~20, p.~30,
+  1968.
+
+\bibitem{canny_computational_1986}
+J.~Canny, ``A {Computational} {Approach} to {Edge} {Detection},'' {\em IEEE
+  Transactions on Pattern Analysis and Machine Intelligence}, vol.~PAMI-8,
+  pp.~679--698, Nov. 1986.
+
+\bibitem{dalal_histograms_2005}
+N.~Dalal and B.~Triggs, ``Histograms of {Oriented} {Gradients} for {Human}
+  {Detection},'' in {\em 2005 {IEEE} {Computer} {Society} {Conference} on
+  {Computer} {Vision} and {Pattern} {Recognition} ({CVPR}'05)}, vol.~1, (San
+  Diego, CA, USA), pp.~886--893, IEEE, 2005.
+
+\bibitem{lowe_distinctive_2004}
+D.~G. Lowe, ``Distinctive {Image} {Features} from {Scale}-{Invariant}
+  {Keypoints},'' {\em International Journal of Computer Vision}, vol.~60,
+  pp.~91--110, Nov. 2004.
+
+\bibitem{nair_rectified_2010}
+V.~Nair and G.~E. Hinton, ``Rectified linear units improve restricted boltzmann
+  machines,'' in {\em Proceedings of the 27th {International} {Conference} on
+  {International} {Conference} on {Machine} {Learning}}, {ICML}'10, (Madison,
+  WI, USA), pp.~807--814, Omnipress, 2010.
+
+\bibitem{simonyan_very_2015}
+K.~Simonyan and A.~Zisserman, ``Very {Deep} {Convolutional} {Networks} for
+  {Large}-{Scale} {Image} {Recognition},'' Apr. 2015.
+\newblock arXiv:1409.1556 [cs.CV].
+
+\bibitem{he_deep_2015}
+K.~He, X.~Zhang, S.~Ren, and J.~Sun, ``Deep {Residual} {Learning} for {Image}
+  {Recognition},'' Dec. 2015.
+\newblock arXiv:1512.03385 [cs.CV].
+
+\bibitem{shi_edge_2016}
+W.~Shi, J.~Cao, Q.~Zhang, Y.~Li, and L.~Xu, ``Edge {Computing}: {Vision} and
+  {Challenges},'' {\em IEEE Internet of Things Journal}, vol.~3, pp.~637--646,
+  Oct. 2016.
 
 \end{thebibliography}

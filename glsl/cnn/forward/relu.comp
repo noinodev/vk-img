@@ -1,0 +1,29 @@
+#version 450
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Adjust layout declaration to match your engine's descriptor setup
+layout(set = 0, binding = 1, r32f) uniform image3D tensors[];
+
+layout(push_constant) uniform PushConstants {
+    uint prev_act; // Raw Conv output
+    uint act;      // Post-ReLU output
+    uint w;
+    uint h;
+    uint ch;
+} pc;
+
+void main() {
+    ivec3 pos = ivec3(gl_GlobalInvocationID.xyz);
+    if (pos.x >= int(pc.w) || pos.y >= int(pc.h) || pos.z >= int(pc.ch)) return;
+
+    // Load raw conv output
+    float val = imageLoad(tensors[nonuniformEXT(pc.prev_act)], pos).r;
+    
+    // Apply ReLU
+    float activated = max(0.0, val);
+    
+    // Store activated output
+    imageStore(tensors[nonuniformEXT(pc.act)], pos, vec4(activated));
+}
