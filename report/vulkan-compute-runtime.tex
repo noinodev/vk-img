@@ -17,7 +17,7 @@
 {\noindent\LARGE\textbf{Convolutional Neural Networks for Edge Devices}}\\[0.1cm]
 {\noindent\large Advanced Topics in Image Processing, Griffith University}\\
 \\
-{\noindent\large Nathan Burg\\Griffith University\\s5348935}\\
+{\noindent\large Nathan Burg\\Griffith University}
 
 \section*{Abstract}
 Convolutional Neural Networks (CNNs) have become the dominant approach for image classification, but their computational requirements often restrict deployment to high-performance hardware and vendor-specific software ecosystems. This paper investigates the feasibility of implementing an end-to-end CNN training and inference pipeline using the Vulkan graphics API as a hardware-agnostic alternative to conventional GPU computing frameworks. A custom Vulkan compute runtime was developed in C, featuring resource management, execution scheduling, and a Lua scripting interface for machine learning workflows. Using this runtime, both a lightweight five-layer CNN and the VGG-16 architecture were implemented and evaluated on the MNIST and CIFAR-100 datasets. Inference performance achieved parity with equivalent PyTorch implementations, demonstrating the correctness of the forward pass implementation. However, training stability remained a significant challenge, with numerical issues limiting model convergence on larger datasets. Despite these limitations, the results demonstrate that Vulkan provides a viable foundation for cross-platform machine learning on edge devices while avoiding dependence on vendor-specific technologies such as CUDA. The work highlights both the opportunities and engineering challenges associated with low-level GPU programming for deep learning applications.

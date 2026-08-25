@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex report"] 1781216169.62165 "report.aux" "report.bbl" "report" 1781216278.61213 0
+["bibtex vulkan-compute-runtime"] 1787633057.05815 "vulkan-compute-runtime.aux" "vulkan-compute-runtime.bbl" "vulkan-compute-runtime" 1787633072.86041 0
   "./image.bib" 1781215787.35105 17629 8795acac167ab7f9c9ab2e05a38630a3 ""
   "/usr/share/texlive/texmf-dist/bibtex/bst/base/ieeetr.bst" 1292289607 18361 1a00e58565e7f19bf2b3e1bfb82254ae ""
-  "report.aux" 1781216278.43507 7249 6d4c171badfccf2494fa7bda7ac51993 "pdflatex"
+  "vulkan-compute-runtime.aux" 1787633072.66307 7249 56ad48f0dbb529bb58768a50acd0dcfa "pdflatex"
   (generated)
-  "report.bbl"
-  "report.blg"
+  "vulkan-compute-runtime.bbl"
+  "vulkan-compute-runtime.blg"
   (rewritten before read)
-["pdflatex"] 1781216278.02951 "report.tex" "report.pdf" "report" 1781216278.61229 0
+["pdflatex"] 1787633072.24907 "vulkan-compute-runtime.tex" "vulkan-compute-runtime.pdf" "vulkan-compute-runtime" 1787633072.86062 0
   "/etc/texmf/web2c/texmf.cnf" 1778831629.7925 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/home/nate/.texlive2023/texmf-var/web2c/pdftex/pdflatex.fmt" 1778831641 6831070 76dad5f62abb3184aa245ab3c605d8b0 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -118,13 +118,13 @@
   "/usr/share/texmf/fonts/type1/public/cm-super/sftt1000.pfb" 1636152094 169201 9ebf99020dde51a5086e186761a34e8f ""
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1778831639.7909 5349216 bf3a80e68d946c7acd95ff030fd9bb63 ""
-  "report.aux" 1781216278.43507 7249 6d4c171badfccf2494fa7bda7ac51993 "pdflatex"
-  "report.bbl" 1781216169.67618 4378 3fd99ab33a6ee1f35060dbf79566aae4 "bibtex report"
-  "report.out" 1781216278.43607 4039 ea2828d747e6c2d63d267be81c0e8092 "pdflatex"
-  "report.tex" 1781216277.10908 43538 de2ae4ad2b86786ca34eeccc938f6cf2 ""
+  "vulkan-compute-runtime.aux" 1787633072.66307 7249 56ad48f0dbb529bb58768a50acd0dcfa "pdflatex"
+  "vulkan-compute-runtime.bbl" 1787633057.11126 4378 3fd99ab33a6ee1f35060dbf79566aae4 "bibtex vulkan-compute-runtime"
+  "vulkan-compute-runtime.out" 1787633072.66307 4039 ea2828d747e6c2d63d267be81c0e8092 "pdflatex"
+  "vulkan-compute-runtime.tex" 1787633071.53006 43526 d41a7b8204a5782b8e849a007d388c35 ""
   (generated)
-  "report.aux"
-  "report.log"
-  "report.out"
-  "report.pdf"
+  "vulkan-compute-runtime.aux"
+  "vulkan-compute-runtime.log"
+  "vulkan-compute-runtime.out"
+  "vulkan-compute-runtime.pdf"
   (rewritten before read)
