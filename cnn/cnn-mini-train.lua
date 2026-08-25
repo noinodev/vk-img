@@ -72,7 +72,6 @@ local epochs = 50
 local adam_t = 1
 local last_correct = 0
 
--- 1. First, find out exactly how many total pages exist in your file
 local total_pages = 0
 local test_atlas = img.create_atlas(file, page_size, total_pages)
 while test_atlas do
@@ -130,7 +129,7 @@ for k = 0, epochs - 1 do
 
                 local time = img.gpu_dispatch(gpu)
 
-                -- 2. Process results
+                -- process results
                 local label, value, true_label_prob = img.class_1d(image_class, fine)
                 
                 if label == fine then correct = correct + 1 end
@@ -140,17 +139,16 @@ for k = 0, epochs - 1 do
                 local scalar_loss = -math.log(math.max(true_label_prob, 1e-15))
                 local current_acc = (label == fine) and 1.0 or 0.0
 
-                -- 3. Calculate Smooth Metrics (EMA)
+                -- average loss
                 if not running_loss then
                     running_loss = scalar_loss
                     smoothed_acc = current_acc
                 else
-                    -- Keep 99% of the past history, factor in 1% of the new image
                     running_loss = (0.99 * running_loss) + (0.01 * scalar_loss)
                     smoothed_acc = (0.99 * smoothed_acc) + (0.01 * current_acc)
                 end
 
-                -- 4. Single-line Status Reporting (Only use io.write with \r)
+                -- logging
                 io.write(string.format(
                     "\r[Epoch: %d/%d  Img: %d/%d]  Loss: %.4f (raw: %.2f) | Acc: %5.1f%% | Current -> Lbl: %d Gs: %d Conf: %4.0f%%",
                     k + 1, epochs,

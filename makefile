@@ -8,6 +8,7 @@ else
 endif
 
 ifeq ($(OS),Windows_NT)
+    # havent set up windows dependencies for a while tbh
     PLATFORM = windows
     OUT = vk.exe
     LIB_ROOT = C:/devlib
@@ -15,17 +16,21 @@ ifeq ($(OS),Windows_NT)
     INCLUDE_DIRS = \
         $(LIB_ROOT)/VulkanSDK/Include \
         $(LIB_ROOT)/cglm/include \
-        $(LIB_ROOT)/stbi
+        $(LIB_ROOT)/stbi \
+        $(LIB_ROOT)/lua-5.5.0/src
 
-    LIB_DIRS = $(LIB_ROOT)/VulkanSDK/Lib
+    LIB_DIRS = \
+        $(LIB_ROOT)/VulkanSDK/Lib \
+        $(LIB_ROOT)/lua-5.5.0/src
 
-    LIBS = vulkan-1 lua gdi32 user32 shell32
+    LIBS = vulkan-1 lua gdi32 user32 shell32 lua
     
     RM = del /Q
     RMDIR = rmdir /S /Q
     MKDIR = if not exist $(@D) mkdir $(subst /,\,$(@D))
     NULLDEV = >nul 2>&1
 else
+    # i dont vendor these libraries so youll have to set your own root path
     PLATFORM = linux
     OUT = vk
     LIB_ROOT = /home/nate/dev/libs
