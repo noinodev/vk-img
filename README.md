@@ -1,5 +1,7 @@
 Simple Vulkan compute engine for image processing and GP-GPU tasks. Adapted from Vulkan renderer using `vkr.h` utility. Example scripts and shaders for basic image processing, HOG-SVM classification, and a half-working CNN implementation (training has correctness issue and doesn't work properly, but inference works fine using pre-trained weights). Originally designed as CPU-only image processing utility for coursework, slowly built into Vulkan compute GP-GPU runtime as a proof-of-concept.
 
+Comes with paper on results for experiment: [https://noino.dev/assets/pdf/vulkan-compute-runtime.pdf]
+
 Building requires Vulkan SDK, cglm, stb-image headers, shaderc and Lua 5.5. Makefile provided, but needs modification to suit your system.
 
 Lua scripting layer for compute interface. Example usage:
